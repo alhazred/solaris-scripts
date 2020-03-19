@@ -1,0 +1,183 @@
+#!/usr/dt/bin/dtksh
+activateCB1 ()
+{
+        /usr/dt/bin/dtterm &
+        return 0
+}
+activateCB2 ()
+{
+        /usr/X/bin/xclock &
+        return 0
+}
+activateCB3 ()
+{
+        echo "Starting firefox"
+        /export/home/operat/firefox.sh &
+        return 0
+}
+
+activateCB4 ()
+{
+        echo "Starting nsradmin"
+        /usr/bin/nwadmin &
+        return 0
+}
+
+activateCB5 ()
+{
+        echo "Starting VXSA"
+        /export/home/operat/startvcs &
+        return 0
+}
+
+activateCB7 ()
+{
+        echo "Starting Access 7"
+        /export/home/scripts/access7.sh $ACCESS7 & 
+        return 0
+}
+
+activateCB8 ()
+{
+        echo "ICA Client starting"
+	export DISPLAY=$HOSTNAME:0.1
+	/usr/lib/ICAClient/wfcmgr &		
+        return 0
+}
+
+activateCB9 ()
+{
+        echo "Starting Ciscoworks"
+        /export/home/scripts/ciscoworks.sh  $Ciscoworks &
+        return 0
+}
+
+activateCB10 ()
+{
+        echo "Quit Button Activated"
+        exit 0
+}
+
+
+XtInitialize TOPLEVEL SMCA Dtksh $0
+
+XtSetValues $TOPLEVEL title:"Operat App Launcher v0.1"
+XtCreateManagedWidget BBOARD bboard XmBulletinBoard \
+        $TOPLEVEL \
+        resizePolicy:RESIZE_NONE \
+        background:Red \
+        height:440 width:250
+
+XtCreateManagedWidget BUTTON1 pushbutton XmPushButton \
+        $BBOARD \
+        background:yellow \
+        foreground:MidnightBlue \
+        labelString:"Terminal" \
+        height:30 width:120 x:75 y:30 \
+        shadowThickness:3
+
+XtCreateManagedWidget BUTTON2 pushbutton XmPushButton \
+        $BBOARD \
+        background:yellow \
+        foreground:MidnightBlue \
+        labelString:"Clock" \
+        height:30 width:120 x:75 y:70 \
+        shadowThickness:3
+
+XtCreateManagedWidget BUTTON3 pushbutton XmPushButton \
+        $BBOARD \
+        background:yellow \
+        foreground:MidnightBlue \
+        labelString:"Big Brother" \
+        height:30 width:120 x:75 y:110 \
+        shadowThickness:3
+
+XtCreateManagedWidget BUTTON4 pushbutton XmPushButton \
+        $BBOARD \
+        background:yellow \
+        foreground:MidnightBlue \
+        labelString:"Networker" \
+        height:30 width:120 x:75 y:150 \
+        shadowThickness:3
+        
+XtCreateManagedWidget BUTTON5 pushbutton XmPushButton \
+        $BBOARD \
+        background:yellow \
+        foreground:MidnightBlue \
+        labelString:"Cluster MGMR" \
+        height:30 width:120 x:75 y:190 \
+        shadowThickness:3
+        
+XtCreateManagedWidget BUTTON6 pushbutton XmPushButton \
+        $BBOARD \
+        background:goldenrod \
+        foreground:MidnightBlue \
+        labelString:"" \
+        height:30 width:120 x:75 y:230 \
+        shadowThickness:3
+
+XtCreateManagedWidget BUTTON7 pushbutton XmPushButton \
+        $BBOARD \
+        background:goldenrod \
+        foreground:MidnightBlue \
+        labelString:"" \
+        height:30 width:120 x:75 y:270 \
+        shadowThickness:3
+
+XtCreateManagedWidget BUTTON8 pushbutton XmPushButton \
+        $BBOARD \
+        background:goldenrod \
+        foreground:MidnightBlue \
+        labelString:"" \
+        height:30 width:120 x:75 y:310 \
+        shadowThickness:3
+
+XtCreateManagedWidget BUTTON9 pushbutton XmPushButton \
+        $BBOARD \
+        background:goldenrod \
+        foreground:MidnightBlue \
+        labelString:"" \
+        height:30 width:120 x:75 y:350 \
+        shadowThickness:3
+
+
+XtCreateManagedWidget BUTTON10 pushbutton XmPushButton \
+        $BBOARD \
+        background:goldenrod \
+        foreground:MidnightBlue \
+        labelString:"Quit" \
+        height:30 width:120 x:75 y:390 \
+        shadowThickness:3
+
+XtAddCallback $BUTTON1 activateCallback activateCB1
+XtAddCallback $BUTTON2 activateCallback activateCB2
+XtAddCallback $BUTTON3 activateCallback activateCB3
+XtAddCallback $BUTTON4 activateCallback activateCB4
+XtAddCallback $BUTTON5 activateCallback activateCB5
+XtAddCallback $BUTTON6 activateCallback activateCB6
+XtAddCallback $BUTTON7 activateCallback activateCB7
+XtAddCallback $BUTTON8 activateCallback activateCB8
+XtAddCallback $BUTTON9 activateCallback activateCB9
+XtAddCallback $BUTTON10 activateCallback activateCB10
+XtRealizeWidget $TOPLEVEL
+XtMainLoop
+
+
+
+
+
+
+
+##############################################################################
+### This script is submitted to BigAdmin by a user of the BigAdmin community.
+### Sun Microsystems, Inc. is not responsible for the
+### contents or the code enclosed. 
+###
+###
+### Copyright 2006 Sun Microsystems, Inc. ALL RIGHTS RESERVED
+### Use of this software is authorized pursuant to the
+### terms of the license found at
+### http://www.sun.com/bigadmin/common/berkeley_license.html
+##############################################################################
+
+

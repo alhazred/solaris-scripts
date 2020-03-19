@@ -1,0 +1,633 @@
+#!/usr/dt/bin/dtksh
+#
+# xpong - a game written in dtksh. This has been written as a demo of the 
+#	Desktop Korn Shell's X11 features (dtksh).
+#
+# Written for a 24-bit colour display. 
+#
+# 18-Apr-2004	ver 0.65	(early release)
+#
+#
+# USAGE: xpong [-h] [-x pixels] [-y pixels] [-fg colour] [-bat colour] 
+#		[-ball colour] [-bg colour] [-skill num] [-speed num]
+#
+#	-h	help
+#	-q	quiet
+#	-x	width (pixels)
+#	-y	height (pixels)
+#	-fg	text colour
+#	-bat	bat colour
+#	-ball	ball colour
+#	-bg	background colour
+#	-skill	difficulty (1, 2 or 3)
+#	-speed	speed factor
+#	-2p	2 player
+#   eg,
+#	xpong 					# default
+#	xpong -bg NavyBlue -bat SkyBlue		# nice colours
+#	xpong -bg RosyBrown -bat PaleGoldenrod	# awful colours
+#	xpong -2p				# 2 player
+#	xpong -skill 1				# easy
+#	xpong -speed 0.5			# half speed (easier)
+#
+# The defaults are for 1 player with a skill level of 2 (normal).
+#  Player 1 uses the keys "A" and "Z", player 2 uses "K" and "M". "Q" to quit.
+#
+# Valid colours may include unusual options such as SkyBlue, MidnightBlue,
+#  AntiqueWhite, LightSeaGreen, MediumAquamarine, etc.. 
+# On Solaris the file to read is, /usr/openwin/lib/X11/rgb.txt
+#
+# NOTES: options are used as "-x 200" not "-x200".
+#  If the keys don't work, edit the "KEYCODES" section in the code below
+#  after checking your key map (try "xmodmap -pke").
+#  This designed as a demo, not a program to take too seriously...
+#
+#
+# COPYRIGHT: Copyright (c) 2004 Brendan Gregg.
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version. 
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details. 
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software Foundation, 
+#  Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+#
+#  (http://www.gnu.org/copyleft/gpl.html)
+#
+# Author: Brendan Gregg  [Sydney, Australia]
+#
+# ToDo:
+#  * enable this program to work on an 8-bit colour display
+# 
+# 10-Apr-2004	Brendan Gregg	Created this
+# 18-Apr-2004	   "      "  	Improved skill level 3
+
+
+#
+# --- Default Variables ---
+#
+max_x=500			# window size x
+max_y=350			# window size y
+colour_bat=White		# bat colour
+colour_ball=White		# ball colour
+colour_text=White		# text colour
+colour_bg=Black			# background colour
+delay=25			# delay (ms), while reading
+skill=2				# default skill level
+quiet=0				# quiet (no sound)
+factor=1			# speed factor
+batwidth=8			# bat thickness
+title="xpong"			# title of window
+cpu=1				# CPU as player 2
+
+#
+# --- Initial Variables ---
+#
+bat1x=10			# initial x position, player 1
+bat1y=5				# initial y position, player 1
+bat2y=5				# initial y position, player 2
+bat1yy=0			# initial y speed, player 1
+bat2yy=0			# initial y speed, player 2
+score1=0			# score player 1
+score2=0			# score player 2
+deadball=15			# timer before viewing ball
+think=10			# CPU think time
+
+
+#
+# --- Parse Options ---
+#
+while (( $# != 0 ))
+do
+        case "$1" in
+	-h|--help)	print -u2 "
+USAGE: $0 [-h] [-x pixels] [-y pixels] [-fg colour] [-bat colour] 
+		[-ball colour] [-bg colour] [-skill num] [-speed num]\n
+	-h	help
+	-q	quiet
+	-x	width (pixels)
+	-y	height (pixels)
+	-fg	text colour
+	-bat	bat colour
+	-ball	ball colour
+	-bg	background
+	-skill	difficulty (1, 2 or 3)
+	-speed	speed factor
+	-2p	2 player
+   eg,
+	$0 					# default
+	$0 -bg NavyBlue -bat SkyBlue		# nice colours
+	$0 -bg RosyBrown -bat PaleGoldenrod	# awful colours
+	$0 -2p					# 2 player
+	$0 -skill 1				# easy
+	$0 -speed 0.5				# half speed (easier)
+   
+   Player 1 uses \"A\" and \"Z\", player 2 uses \"K\" and \"M\". \"Q\" to quit."
+		exit 0
+		;;
+	-fg|-tc) colour_text=$2
+		shift
+		;;
+	-x)	max_x=$2
+		if (( max_x < 100 )); then
+			print -u2 "ERROR: Width $max_x is too small\n"
+			exit 1
+		fi
+		shift
+		;;
+	-y)	max_y=$2
+		if (( max_y < 100 )); then
+			print -u2 "ERROR: Height $max_y is too small\n"
+			exit 1
+		fi
+		shift
+		;;
+	-bat)	colour_bat=$2
+		shift
+		;;
+	-ball)	colour_ball=$2
+		shift
+		;;
+	-skill)	skill=$2
+		shift
+		;;
+	-speed)	factor=$2
+		shift
+		;;
+	-bg)	colour_bg=$2
+		shift
+		;;
+	-q)	quiet=1
+		;;
+	-2p)	cpu=0
+		;;
+        esac
+        shift
+done
+
+
+#
+# --- Calculate scalable variables ---
+#
+function scalables {
+	(( score_x = max_x / 2 - 30 ))
+	(( batheight = max_y / 4 ))
+	(( batspeed = factor * max_y / 24 ))
+	(( bat2x = max_x - bat1x ))
+	(( ballsize = max_x / 40 ))
+	(( ballhalf = ballsize / 2 ))
+	(( ballspeed = factor * max_x / 48 ))
+	(( bat1y2 = bat1y + batheight ))
+	(( bat2y2 = bat2y + batheight ))
+	(( min_xx = factor * max_x / 100 ))
+	if (( min_xx == 0 )); then min_xx=1; fi
+	if (( ballspeed == 0 )); then ballspeed=1; fi
+
+	# the following caches common calculations for speed
+	(( boundry1 = 0 ))
+	(( boundry2 = bat1x + batwidth ))
+	(( boundry3 = bat2x - batwidth ))
+	(( boundry4 = max_x ))
+	(( boundry5 = max_y - ballsize ))
+	(( boundry6 = max_y - batheight ))
+	(( boundry7 = bat1x + batwidth + ballsize + ballspeed ))
+	(( boundry8 = bat2x - batwidth - ballsize - ballspeed ))
+}
+
+
+#
+# --- Calculate scalables ---
+#
+scalables
+
+# and more initials,
+ball1xx=-$ballspeed
+ball1yy=$ballspeed
+if (( cpu == 1 )); then
+	bat2yy=$batspeed
+else
+	bat2yy=0
+fi
+(( bat1y2 = bat1y + batheight ))
+(( bat2y2 = bat2y + batheight ))
+(( ball1x = max_x * 2.2 / 3 ))
+(( ball1y = max_y * 2.5 / 3 ))
+
+
+# 
+# --- Create X11 window ---
+#
+XtInitialize TOP plot Plot $0 
+XtCreateManagedWidget FORM form XmForm $TOP \
+	resizePolicy:RESIZE_ANY dialogTitle:"$title" \
+	height:$max_y width:$max_x x:0 y:0 \
+	background:$colour_bg foreground:$colour_bg
+
+#
+# --- Create panel ---
+#
+XtCreateManagedWidget DRAW1 draw1 XmDrawingArea $FORM \
+	topAttachment:ATTACH_FORM bottomAttachment:ATTACH_FORM \
+	leftAttachment:ATTACH_FORM rightAttachment:ATTACH_FORM \
+	x:0 y:0 background:$colour_bg marginHeight:0
+
+#
+# --- Create scores ---
+#
+XtCreateManagedWidget SCORE1 score1 XmLabel $DRAW1 \
+	x:$score_x y:8 foreground:$colour_text background:$colour_bg \
+	labelString:"$score1   :   $score2"
+
+#
+# --- Fetch widget IDs ---
+#
+XtDisplay DISPLAY $FORM
+XSync $DISPLAY true
+XtRealizeWidget $TOP
+XtWindow WINDOW1 $DRAW1
+
+
+#
+# --- Redraw - clear ---
+#
+# This clears the game by redrawing it using the background colour.
+#
+function redraw_clear {
+	yes=$1
+
+	### Clear the bats
+	if (( yes || (bat1y != old_bat1y) )); then
+		XDrawLine $DISPLAY $WINDOW1 \
+			-foreground $colour_bg \
+			-line_width $batwidth \
+			-line_style LineSolid \
+			$bat1x $old_bat1y $bat1x $old_bat1y2
+	fi
+	if (( yes || (bat2y != old_bat2y) )); then
+		XDrawLine $DISPLAY $WINDOW1 \
+			-foreground $colour_bg \
+			-line_width $batwidth \
+			-line_style LineSolid \
+			$bat2x $old_bat2y $bat2x $old_bat2y2
+	fi
+
+	### Clear the ball
+	XFillArc $DISPLAY $WINDOW1 \
+		-foreground $colour_bg \
+		$old_ball1x $old_ball1y $ballsize $ballsize 0 23040
+
+}
+
+#
+# --- Redraw - solid ---
+#
+# This redraws the game using the solid colours.
+#
+function redraw_solid {
+	yes=$1
+
+	# this is the zone where the ball can wipe the bat
+	if (( old_ball1x < boundry7 || old_ball1x > boundry8 )); then
+		yes=1
+	fi
+
+	### Draw the bats
+	if (( yes || (bat1y != old_bat1y) )); then
+		XDrawLine $DISPLAY $WINDOW1 \
+			-foreground $colour_bat \
+			-line_width $batwidth \
+			-line_style LineSolid \
+			$bat1x $bat1y $bat1x $bat1y2
+	fi
+	if (( yes || (bat2y != old_bat2y) )); then
+		XDrawLine $DISPLAY $WINDOW1 \
+			-foreground $colour_bat \
+			-line_width $batwidth \
+			-line_style LineSolid \
+			$bat2x $bat2y $bat2x $bat2y2
+	fi
+
+	### Draw the ball
+	if (( deadball <= 0 )); then
+		XFillArc $DISPLAY $WINDOW1 \
+			-foreground $colour_ball \
+			$ball1x $ball1y $ballsize $ballsize 0 23040
+	fi
+
+	XFlush $DISPLAY
+}
+
+#
+# --- Resize Window function ---
+#
+function resizewin {
+	### Clear window
+	redraw_clear 1
+
+	### Fetch new size
+	XtGetValues $DRAW1 width:max_x height:max_y
+	scalables
+
+	### Draw new window
+	redraw_solid 2
+	XtSetValues $SCORE1 x:$score_x y:8
+}
+
+#
+# --- Game Input - keyboard ---
+#
+function gameinput {
+
+	#
+	# --- KEYCODES ---
+	#
+	key=${EH_EVENT.XKEY.KEYCODE}
+	if (( key == 38 || key == 11 || key == 84 )); then
+		# A, player 1 up
+		bat1yy=-$batspeed
+	elif (( key == 53 || key == 63 || key == 36 || key == 107 )); then
+		# Z, player 1 down
+		bat1yy=$batspeed
+	elif (( key == 45 || key == 48 || key == 21 || key == 91 )); then
+		# K, player 2 up
+		bat2yy=-$batspeed
+	elif (( key == 59 || key == 50 || key == 23 || key == 113 )); then
+		# M, player 2 down
+		bat2yy=$batspeed
+	elif (( key == 54 || key == 24 || key == 27 || key == 61 )); then
+		# Q, quit
+		exit 0
+	fi
+}
+
+#
+# --- Increment coordinates function ---
+#
+function increment {
+	### save old values
+	old_bat1y=$bat1y
+	old_bat1y2=$bat1y2
+	old_bat2y=$bat2y
+	old_bat2y2=$bat2y2
+	old_ball1x=$ball1x
+	old_ball1y=$ball1y
+
+	### Increment values
+	(( bat1y += bat1yy ))
+	(( bat2y += bat2yy ))
+	(( bat1y2 = bat1y + batheight ))
+	(( bat2y2 = bat2y + batheight ))
+	if (( deadball > 0 )); then
+		# ball still out of play
+		(( deadball-- ))
+	else
+		(( ball1x += ball1xx ))
+		(( ball1y += ball1yy ))
+	fi
+}
+
+#
+# --- Move CPU function ---
+#
+function movecpu {
+
+	if (( skill == 1 )); then
+		### Simple, we just bounce back and forth
+		if (( bat2y > boundry6 )); then
+			bat2y=$boundry6
+			bat2yy=-$batspeed
+		fi
+		if (( bat2y < 0 )); then
+			bat2y=0
+			bat2yy=$batspeed
+			(( bat2y2 = bat2y + batheight ))
+		fi
+
+	elif (( skill == 2 )); then
+		### Here we think a little, and move when the ball moves
+		(( think-- ))
+		if (( think <= 0 )); then
+			if (( ball1yy < 0 )); then
+				bat2yy=-$batspeed
+			else
+				bat2yy=$batspeed
+			fi
+			think=10
+		fi
+		if (( bat2y > boundry6 )); then
+			bat2y=$boundry6; bat2yy=0
+		fi
+		if (( bat2y < 0 )); then
+			bat2y=0; bat2yy=0
+			(( bat2y2 = bat2y + batheight ))
+		fi
+
+        elif (( skill == 3 )); then
+		### Here we think proportinate to ball speed and
+		### ball position, then move toward the ball
+		(( think-- ))
+		if (( think <= 0 && ball1x > boundry9 && ball1xx > 0 )); then
+			if (( (ball1y - bat2y - (batheight/2)) < 0 )); then
+				bat2yy=-$batspeed
+			else
+				bat2yy=$batspeed
+			fi
+			(( think = ballspeed*15/ball1xx * 
+			 (max_x-ball1x)/max_x ))
+			if (( think < 0 )); then (( think = - think )); fi
+			(( think += RANDOM %2 ))
+		fi
+		if (( bat2y > boundry6 )); then
+			bat2y=$boundry6; bat2yy=0
+		fi
+		if (( bat2y < 0 )); then
+			bat2y=0; bat2yy=0
+			(( bat2y2 = bat2y + batheight ))
+		fi
+
+	elif (( skill == 0 )); then
+		### Random
+		(( think-- ))
+		if (( think <= 0 )); then
+			if (( (RANDOM % 2) == 0 )); then
+				bat2yy=-$batspeed
+			else
+				bat2yy=$batspeed
+			fi
+			(( think = RANDOM % 15 ))
+		fi
+		if (( bat2y > boundry6 )); then
+			bat2y=$boundry6; bat2yy=0
+		fi
+		if (( bat2y < 0 )); then
+			bat2y=0; bat2yy=0
+			(( bat2y2 = bat2y + batheight ))
+		fi
+	fi
+}
+
+#
+# --- Check Bounds function ---
+#
+function checkbounds {
+
+	if (( bat1y > boundry6 )); then
+		bat1y=$boundry6
+		bat1yy=0
+	fi
+	if (( bat1y < 0 )); then
+		bat1y=0; bat1yy=0
+		(( bat1y2 = bat1y + batheight ))
+	fi
+	if (( cpu == 0 )); then
+		if (( bat2y > boundry6 )); then
+			bat2y=$boundry6
+			bat2yy=0
+		fi
+		if (( bat2y < 0 )); then
+			bat2y=0; bat2yy=0
+			(( bat2y2 = bat2y + batheight ))
+		fi
+	fi
+	if (( ball1x < boundry1 )); then
+		### Increment score
+		(( score2++ ))
+		XtSetValues $SCORE1 labelString:"$score1   :   $score2"
+
+		### Reset ball position
+		(( ball1x = max_x * 1 / 2 ))
+		(( ball1y = max_y * 1 / 2 ))
+		ball1xx=-$ballspeed
+		ball1yy=-$ballspeed
+		deadball=30
+	fi
+	if (( ball1x > boundry4 )); then
+		### Increment score
+		(( score1++ ))
+		XtSetValues $SCORE1 labelString:"$score1   :   $score2"
+
+		### Reset ball position
+		(( ball1x = max_x * 1 / 2 ))
+		(( ball1y = max_y * 1 / 2 ))
+		ball1xx=-$ballspeed
+		ball1yy=-$ballspeed
+		deadball=30
+	fi
+	if (( ball1y < 0 )); then
+		ball1y=0
+		(( ball1yy = - ball1yy ))
+	fi
+	if (( ball1y > boundry5 )); then
+		ball1y=$boundry5
+		(( ball1yy = - ball1yy ))
+	fi
+}
+
+#
+# --- Check Bounce function ---
+#
+function checkbounce {
+	
+	### Check for hit on player 1
+	if (( (ball1x < boundry2) && (ball1xx < 0) )); then
+		if (( (ball1y >= bat1y) && (ball1y <= bat1y2) ))
+		then
+			if (( quiet == 0 )); then
+				print -n ""
+			fi
+			ball1x=$boundry2
+
+			### Check for edge hit
+			if (( ball1y < bat1y + batheight / 4 )); then
+				(( nudge = (RANDOM % 3) - 1 ))
+				if (( ball1yy > 0 )); then
+					(( ball1xx = - ball1xx * 5/4  ))
+				else
+					(( ball1xx = - ball1xx * 3/4  ))
+				fi
+				(( ball1yy -= ballspeed * 1/4 + nudge ))
+			elif (( ball1y > bat1y + (batheight * 3 / 4) )); then
+				(( nudge = (RANDOM % 3) - 1 ))
+				if (( ball1yy < 0 )); then
+					(( ball1xx = - ball1xx * 5/4  ))
+				else
+					(( ball1xx = - ball1xx * 3/4  ))
+				fi
+				(( ball1yy += ballspeed * 1/4 + nudge ))
+			else
+				(( ball1xx = - ball1xx ))
+			fi
+			if (( ball1xx < min_xx )); then ball1xx=$min_xx; fi
+		fi
+	fi
+
+	### Check for hit on player 2
+	if (( ball1x > boundry3 )); then
+		if (( (ball1y >= bat2y) && (ball1y <= bat2y2) ))
+		then
+			if (( quiet == 0 )); then
+				print -n ""
+			fi
+			ball1x=$boundry3
+
+			### Check for edge hit
+			if (( ball1y < bat2y + batheight / 4 )); then
+				(( nudge = (RANDOM % 3) - 1 ))
+				if (( ball1yy > 0 )); then
+					(( ball1xx = - ball1xx * 5/4  ))
+				else
+					(( ball1xx = - ball1xx * 3/4  ))
+				fi
+				(( ball1yy -= ballspeed * 1/4 + nudge ))
+			elif (( ball1y > bat2y + (batheight * 3 / 4) )); then
+				(( nudge = (RANDOM % 3) - 1 ))
+				if (( ball1yy < 0 )); then
+					(( ball1xx = - ball1xx * 5/4  ))
+				else
+					(( ball1xx = - ball1xx * 3/4  ))
+				fi
+				(( ball1yy += ballspeed * 1/4 + nudge ))
+			else
+				(( ball1xx = - ball1xx ))
+			fi
+			if (( ball1xx > - min_xx )); then ball1xx=-$min_xx; fi
+		fi
+	fi
+}
+
+
+#
+# --- Update graphs function ---
+#
+function update {
+
+	### Calculate new coordinates
+	increment
+	if (( cpu == 1 )); then movecpu; fi
+	checkbounce
+	checkbounds
+
+	### Draw objects
+	redraw_clear 0
+	redraw_solid 0
+
+	### Trigger next update
+	XtAddTimeOut ID $delay update
+}
+
+
+#
+# --- Main ---
+#
+XtAddEventHandler $DRAW1 "KeyPressMask" false gameinput
+XtAddCallback $DRAW1 exposeCallback "redraw_solid 1"
+XtAddCallback $DRAW1 resizeCallback resizewin
+XtAddTimeOut ID $delay update
+XtMainLoop

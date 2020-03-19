@@ -1,0 +1,49 @@
+#! /bin/nawk -f
+
+### Script tidies up the output of commands like "df"
+### and "ls", where file and disk sizes allow bigger 
+### values than the format strings are expecting.
+###
+### The script loads the standard input into an array,
+### and looks for the maximum width of each column.
+### It then prints out the array, using the maximum width
+### in the formatting string.
+###
+### eg. df -k | ac
+###
+
+BEGIN{
+           maxf = 0
+}
+{
+           for(i=0;i<=NF;i++){
+                     arr[NR,i] = $i
+                     if ( NF > maxf ) maxf = NF
+                     if ( length($i) > maxl[i] ) maxl[i] = length($i)
+           }
+}
+END{
+           for(x=0;x<=NR;x++){
+                     for(y=o;y<=maxf;y++){
+                               printf("%-"maxl[y]"s ", arr[x,y])
+                     }
+                     printf("\n")
+           }
+}
+
+
+
+
+##############################################################################
+### This script is submitted to BigAdmin by a user of the BigAdmin community.
+### Sun Microsystems, Inc. is not responsible for the
+### contents or the code enclosed. 
+###
+###
+### Copyright 2006 Sun Microsystems, Inc. ALL RIGHTS RESERVED
+### Use of this software is authorized pursuant to the
+### terms of the license found at
+### http://www.sun.com/bigadmin/common/berkeley_license.html
+##############################################################################
+
+
