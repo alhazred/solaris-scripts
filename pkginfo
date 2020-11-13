@@ -1,0 +1,11 @@
+PKG=TestPKG
+NAME=Testpackage for testing the installation process
+VERSION=1.0.0.0
+ARCH=sparc
+CLASSES=none
+CATEGORY=application
+VENDOR=Paloma
+ISTATES=S s 1 2 3
+RSTATES=S s 1 2 3
+BASEDIR=/opt/testpkg
+

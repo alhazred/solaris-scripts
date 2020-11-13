@@ -1,0 +1,350 @@
+# config file for create_zone.sh v1.1.15, created Fri Sep 18 08:24:14 MEST 2009
+
+# config file for create_zones.sh for zones with RCM support
+#
+
+
+# extension for backup files
+
+  DEFAULT_BACKUP_EXTENSION=".$$.backup"
+
+## EXCLUSIVE_IP_STACK_CONFIG_FILES
+##   network configuration files that will be copied from the global zone
+##   to the non-global zone if an exclusive IP stack is used
+##   Note: Add only fully qualified filenames here!
+##
+  EXCLUSIVE_IP_STACK_CONFIG_FILES="
+/etc/netmasks
+/etc/networks
+/etc/defaultrouter
+/etc/hosts
+"
+
+## NAME_SERVER_CONFIG_FILES 
+##   name server configuration files
+##   Note: Add only fully qualified filenames here!
+##
+  NAME_SERVER_CONFIG_FILES="
+/etc/resolv.conf
+/etc/nsswitch.conf
+"
+
+## DEFAULT_FREE_SPACE_FOR_THE_ZONE
+##   free space neccessary for the zone in KB
+##   (the default depends on the type of the zone)
+##
+  DEFAULT_FREE_SPACE_FOR_THE_ZONE=""
+
+## DEFAULT_FREE_SPACE_FOR_A_BIG_ZONE
+##   default free space needed for a big zone in kb
+##
+  DEFAULT_FREE_SPACE_FOR_A_BIG_ZONE=3500000
+
+## DEFAULT_FREE_SPACE_FOR_A_SMALL_ZONE
+##   default free space needed for a small zone in kb
+##
+  DEFAULT_FREE_SPACE_FOR_A_SMALL_ZONE=200000
+
+## DEFAULT_ZONE_MODE
+##   default type of the new zone; 
+##   possible values: small (= sparse zone) or big (= whole root zone)
+##
+  DEFAULT_ZONE_MODE="small"
+
+## DEFAULT_ZONE_CLONE_SOURCE
+##   source zone for cloning
+##
+  DEFAULT_ZONE_CLONE_SOURCE=""
+  
+## DEFAULT_ZONE_PATH
+##   base directory for zones (can be a symbolic link; 
+##   this will be resolved by the script)
+## 
+  DEFAULT_ZONE_PATH="/zones"
+
+## DEFAULT_ZONE_ROOT_PASSWORD
+##   default for the root password is the password
+##   of the existing root user
+##  
+#  DEFAULT_ZONE_ROOT_PASSWORD="$( grep root /etc/shadow 2>/dev/null | cut -f2 -d ":" )"
+   DEFAULT_ZONE_ROOT_PASSWORD="EnFQsCk8TXWVU"
+
+## DEFAULT_ZONE_TZ
+##   the default timezone is the timezone of the machine
+##
+  DEFAULT_ZONE_TZ="$( grep "^TZ=" /etc/TIMEZONE 2>/dev/null | cut -f2 -d"=" )"
+  [ "${DEFAULT_TZ}"x = ""x ] && DEFAULT_TZ="${TZ}"
+
+## DEFAULT_ZONE_LOCALE
+##   default locale is the current locale
+##
+  DEFAULT_ZONE_LOCALE="${LANG}"
+  [ "${DEFAULT_ZONE_LOCAL}"x = ""x ] && DEFAULT_ZONE_LOCALE="C"
+
+## DEFAULT_ZONE_TERMINAL  
+##   default terminal type for the zone
+##
+  DEFAULT_ZONE_TERMINAL="${TERM:-vt100}"
+
+## DEFAULT_ZONE_TIMESERVER
+##   default timeserver for the zones
+##
+  DEFAULT_ZONE_TIMESERVER="localhost"
+
+## DEFAULT_ZONE_CUSTOMIZE_SCRIPT_SOURCE  
+##   default customize script for the zone
+##   Possible values for this variabe are:
+##       "builtin", "none", or the name of an existing script
+##   The customize script runs inside the new zone
+##   while first rebooting the zone
+##
+  DEFAULT_ZONE_CUSTOMIZE_SCRIPT_SOURCE="/applications/SunTools/CURRENT/bin/zone_customize_script.sh"
+
+## DEFAULT_ZONE_CUSTOMIZE_SCRIPT_TARGET
+##   fully qualified name of the customize script inside the zone
+##
+##   Note: The runlevel in which the script runs depends on the path of the 
+##         customize scripts
+##         The default is rcS.d = multi-user-server
+##       
+  DEFAULT_ZONE_CUSTOMIZE_SCRIPT_TARGET="/etc/rcS.d/S99customize_script"
+
+## DEFAULT_ZONE_SMF_PROFILE
+##   SMF site profile for the zone; default: none
+##
+  DEFAULT_ZONE_SMF_PROFILE=""
+
+## DEFAULT_ZONE_IP_ADDRESS  
+##   there is no default IP address for the zone
+##
+  DEFAULT_ZONE_IP_ADDRESS=""
+
+## DEFAULT_ZONE_IP_STACK
+##   this can be either SHARED or EXCLUSIVE; the default is SHARED
+##
+  DEFAULT_ZONE_IP_STACK="SHARED"
+
+## DEFAULT_ZONE_NETMASK
+##  netmask for the zone (only used for zones with exclusive IP stack!)
+##
+  DEFAULT_ZONE_NETMASK=""
+  
+## DEFAULT_ZONE_DEFAULT_ROUTER
+##  default router for the zones 
+##  Note: A default router for a zone can only be configured for zones in Solaris 10 Update 6 and newer
+##
+  DEFAULT_ZONE_DEFAULT_ROUTER=""
+#  $(  netstat -rn | grep "^default" | tr -s " " | cut -f2 -d " " | head -1 )"
+  
+## ZONE_GLDV3_CHECK
+##   Do check the GLDv3 capabiltiy (yes, default) of the network adapter or not (no)
+##
+   DEFAULT_ZONE_GLDV3_CHECK="yes"
+
+## DEFAULT_ZONE_NAME
+##   there is no default name for the zone
+##
+  DEFAULT_ZONE_NAME=""
+
+## DEFAULT_ZONE_GLOBAL_OPTIONS
+##   additional global options for the zone
+##   (e.g. bootargs, pool, limitpriv, etc)
+##   Please note that the script DOES not check the syntax or semantic for these entries!
+##
+   DEFAULT_ZONE_GLOBAL_OPTIONS=""
+   
+## DEFAULT_USE_EXISTING_NAMESERVER_CONFIG
+##   default nameserver configuration is: 
+##     use the existing nameserver configuration
+##
+  DEFAULT_USE_EXISTING_NAMESERVER_CONFIG=${__TRUE}
+
+## DEFAULT_ZONE_AUTOBOOT
+##   enable zone autoboot?; default is false
+##
+  DEFAULT_ZONE_AUTOBOOT=${__FALSE}
+
+## DEFAULT_ZONE_NETWORK_INTERFACE
+##   the default network interface for the zone
+##   The default is the network interface which hosts the
+##   network with the IP address for the zone
+##
+  DEFAULT_ZONE_NETWORK_INTERFACE=""
+
+## DEFAULT_BOOT_THE_ZONE_NOW
+##   boot the zone after installation?
+##
+  DEFAULT_BOOT_THE_ZONE_NOW=${__FALSE}
+
+## DEFAULT_ZONE_MEMORY_LIMIT
+##   the memory limit for the zone
+##   There is no default for this keyword
+##   Note that this configuration is only supported in 
+##   Solaris 10 8/07 and newer!
+##  
+  DEFAULT_ZONE_MEMORY_LIMIT=""
+
+## DEFAULT_ZONE_SWAP_LIMIT
+##   the swap limit for the zone
+##   There is no default for this keyword
+##   Note that this configuration is only supported in 
+##   Solaris 10 8/07 and newer!
+##
+  DEFAULT_ZONE_SWAP_LIMIT=""
+
+## DEFAULT_ZONE_CPU_COUNT
+##   the number of CPUs for the zone
+##   There is no default for this keyword
+##   Note that this configuration is only supported in 
+##   Solaris 10 8/07 and newer!
+##
+  DEFAULT_ZONE_CPU_COUNT=""
+
+## DEFAULT_ZONE_CPU_SHARES
+##   the number of CPU shares for the zone
+##   There is no default for this keyword
+##   Note that this configuration is only supported in 
+##   Solaris 10 8/07 and newer!
+##
+  DEFAULT_ZONE_CPU_SHARES=""
+
+## DEFAULT_ZONE_INHERITED_DIRS
+##   add. directories that should be inherited by the zone
+##   Note: Directories with space or tabs in the name are NOT supported!
+##
+   DEFAULT_ZONE_INHERITED_DIRS=""
+
+## DEFAULT_ZONE_WRITABLE_DIRS
+##   directories that should be mounted r/w in the zone
+##   Format of the entries:
+##      zone_dir:global_dir
+##   Note: Directories with space or tabs in the name are NOT supported!
+##
+   DEFAULT_ZONE_WRITABLE_DIRS=""
+
+## DEFAULT_ZONE_READONLY_DIRS
+##   directories that should be mounted r/o in the zone
+##   Format of the entries:
+##      zone_dir:global_dir
+##   Note: Directories with space or tabs in the name are NOT supported!
+##
+   DEFAULT_ZONE_READONLY_DIRS=""
+
+## DEFAULT_ZONE_DATASETS
+##   ZFS datasets for the zone
+##
+   DEFAULT_ZONE_DATASETS=""
+
+## DEFAULT_ZONE_DEVICES
+##
+  DEFAULT_ZONE_DEVICES=""
+  
+## DEFAULT_EDIT_ZONE_CONFIG
+##   edit the zone configuration before creating the zone 
+##   after exiting the editor the user can choose to continue
+##   or to abort the zone installation
+##
+  DEFAULT_EDIT_ZONE_CONFIG=${__FALSE}
+
+## DEFAULT_ZONE_TEMPLATE_DIRS
+##   Template directories for the zone; all files and directories in the
+##   directories listed in this variable are copied to the root dir of the
+##   zone
+  if [ -d "${DEFAULT_ZONE_PATH}/template_dir" ] ; then
+    ZONE_TEMPLATE_DIRS="${DEFAULT_ZONE_PATH}/template_dir"
+  else
+    ZONE_TEMPLATE_DIRS=""
+  fi
+
+## DEFAULT_ZONE_FILES_TO_COPY
+##   File which should be copied from the global zone to the non-global zone
+##   The file(s) are copied to the same location in the non-global zone 
+##
+   DEFAULT_ZONE_FILES_TO_COPY="
+/var/db/var/query_postinstall.conf
+/var/db/var/installed_x_services
+/etc/ssh/sshd_config
+"
+
+## DEFAULT_ZONE_FINISH_SCRIPT
+##
+##   finish script for creating the zone
+##   This script is called in the global zone after the new 
+##   zone is created and configured but before it is booted
+##   The parameters for the script are
+##     - the fully qualified name of the directory for the zone
+##
+##   Note: Please write your finish scripts so that they handle multiple parameter correct
+##         because there may be additional parameter in a future version of this script!
+##
+##   The finish script must return 0 if everything is okay; everthing else
+##   is interpreted as error and the zone creation is aborted
+##
+##   Note that you can change the configuration of the zone from within the finish script 
+##   with a few exceptions (e.g. you can NOT add directories to inherit here)
+##
+##   All environment variables beginning with ZONE_ are exported and can be used by the
+##   finish script. The exported variables are:
+##
+##     ZONE_AUTOBOOT
+##     ZONE_CLONE_SOURCE
+##     ZONE_CUSTOMIZE_SCRIPT_CONTENTS
+##     ZONE_CUSTOMIZE_SCRIPT_SOURCE
+##     ZONE_CUSTOMIZE_SCRIPT_TARGET
+##     ZONE_FINISH_SCRIPT
+##     ZONE_IP_ADDRESS
+##     ZONE_LOCALE
+##     ZONE_MODE
+##     ZONE_NAME
+##     ZONE_NETWORK_INTERFACE
+##     ZONE_PATH
+##     ZONE_ROOT_PASSWORD
+##     ZONE_SMF_PROFILE
+##     ZONE_TERMINAL
+##     ZONE_TIMESERVER
+##     ZONE_TZ
+##     ZONE_IP_STACK
+##     ZONE_NETMASK
+##     ZONE_DEFAULT_ROUTER
+##     ZONE_MEMORY_LIMIT
+##     ZONE_SWAP_LIMIT
+##     ZONE_CPU_COUNT
+##     ZONE_CPU_SHARES
+##     ZONE_INHERITED_DIRS
+##     ZONE_WRITABLE_DIRS
+##     ZONE_READONLY_DIRS
+##     ZONE_DATASETS
+##     ZONE_GLDV3_CHECK
+##     ZONE_GLOBAL_OPTIONS
+##     ZONE_DEVICES
+##     ZONE_TEMPLATE_DIRS
+##     ZONE_FILES_TO_COPY
+##
+##
+  DEFAULT_ZONE_FINISH_SCRIPT=""
+
+## DEFAULT_ZONE_CUSTOMIZE_SCRIPT_CONTENTS
+##   builtin customize script for the zones
+##   The customize script runs inside the new zone while first
+##   booting the zone
+##
+  DEFAULT_ZONE_CUSTOMIZE_SCRIPT_CONTENTS="
+  echo \"Customization of the zone is running ...\"
+
+  echo \"Disabling sendmail ...\"
+  svcadm disable sendmail
+  svcadm disable svc:/application/cde-printinfo:default
+
+  echo \" ... customization done. Removing the customize script\"
+  rm \$0
+"
+  
+# only change the following variables if you know what you are doing #
+
+  ZONE_CONFIG_FILE="/etc/create_zone.cfg"
+
+# no further internal variables defined yet
+#
+# Note you can redefine any variable that is initialized before calling
+# ReadConfigFile here!
+

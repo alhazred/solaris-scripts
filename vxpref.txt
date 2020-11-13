@@ -1,0 +1,1789 @@
+#!/usr/bin/ksh
+#
+WGET_VERSION="$( wget -V | grep Wget | cut -f3 -d " " )"
+
+# vxpref - CGI script to view the patchdiag.xref file from Sun
+#
+# Author: Bernd Schemmer, Bernd.Schemmer@gmx.de
+#
+# credits: Heiner Steven (heiner.steven@odn.de)
+#
+# History: 03/08/2005 0.0.1 /bs - initial release
+#          03/09/2005 0.0.2 /bs - minor enhancements
+#          04/04/2005 0.0.3 /bs - made the local patch directory variabel
+#                                 massiv performance enhancements
+#          04/06/2005 0.0.4 /bs - minor performance enhancements
+#          06/13/2005 0.0.5 /bs - corrected a bug in the handling of obsolete patches
+#          12/08/2011 0.0.6 /bs - adapted company change Sun -> Oracle
+#                                 increased functionality
+#
+#
+#          
+# Installation: Copy the script to the cgi-bin directory of your web server 
+#               and make it executable
+#
+# Usage: create a link for the script without any parameter:
+#        <a href="/cgi-bin/vxpref.cgi">patchdiag analyse"</a>
+#
+# License: Freeware
+#
+# CDDL HEADER START
+#
+# The contents of this file and the script are subject to the terms of the
+# Common Development and Distribution License, Version 1.0 only
+# (the "License").  You may not use this file except in compliance
+# with the License.
+#
+# You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
+# or http://www.opensolaris.org/os/licensing.
+# See the License for the specific language governing permissions
+# and limitations under the License.
+#
+# When distributing Covered Code, include this CDDL HEADER in each
+# file and include the License file at usr/src/OPENSOLARIS.LICENSE.
+# If applicable, add the following below this CDDL HEADER, with the
+# fields enclosed by brackets "[]" replaced with your own identifying
+# information: Portions Copyright [yyyy] [name of copyright owner]
+#
+# CDDL HEADER END
+#
+# Customization:
+#
+#  LOCAL_PATCH_DIRECTORY is the fully qualified name of the directory 
+#  with the patches 
+#  def.: LOCAL_PATCH_DIRECTORY="/export/install/All_Patches"
+#
+#  PATCHDIAG_XREF_FILE_DIR is the fully qualified name of the directory 
+#  with patchdiag.xref
+#  def.: PATCHDIAG_XREF_FILE_DIR="/export/install/tools"
+#
+#  WEBSERVER_PATCH_DIR is the directory with the patches relative 
+#  to the document root of the web server running the CGI script
+#  def: WEBSERVER_PATCH_DIR="./All_Patches"
+#
+  
+# disable filename globbing
+set -f
+
+__VERSION="0.0.6"
+__SCRIPTNAME="${0##*/}"
+
+ORACLE_WEBSITE_FOR_PATCHES="getupdates.oracle.com"
+ORACLE_ONLINE_PORTAL="http://support.oracle.com"
+
+AUTHOR="Bernd Schemmer"
+AUTHOR_EMAIL_ADDRESS="<a title=\"Mail to\" href=mailto:Bernd.Schemmer@gmx.de>Bernd.Schemmer@gmx.de</a>"
+AUTHOR_WEBSITE="<a title=\"Goto my homepage\" target=_blank href=http://bnsmb.de>http://bnsmb.de</a>"
+
+AUTHOR_MESSAGE="
+<p>
+<strong>vxpref version 
+<a title=\"view news and history\" href=\"/cgi-bin/${__SCRIPTNAME}?ACTION=NEWS\"  target=patch_rechts>${__VERSION}</a>.
+</strong>
+<br>
+written by ${AUTHOR}, ${AUTHOR_EMAIL_ADDRESS}, ${AUTHOR_WEBSITE}
+</p>
+"
+
+AUTHOR_MESSAGE_SHORT="
+<p>
+<strong>vxpref version 
+<a title=\"view news and history\" href=\"/cgi-bin/${__SCRIPTNAME}?ACTION=NEWS\" target=patch_rechts>${__VERSION}</a>.
+</strong>
+<br>
+(c) ${AUTHOR_EMAIL_ADDRESS}
+<br>
+${AUTHOR_WEBSITE}
+</p>
+"
+
+# change the following variables to your need
+#
+  PATCHDIAG_XREF_FILE_DIR="/export/install/tools"
+  PATCHDIAG_XREF_FILE="${PATCHDIAG_XREF_FILE_DIR}/patchdiag.xref"
+  
+  LOCAL_PATCH_DIRECTORY="/export/install/All_Patches"
+  WEBSERVER_PATCH_DIR="./All_Patches"
+
+### ----------------------------------------------------------------- 
+
+### Subroutines
+#
+# Code for ConvertString based on a script from 
+#	Heiner Steven (heiner.steven@odn.de)
+#
+ConvertString() {
+
+echo "$1" | awk '
+    BEGIN {
+	hextab ["0"] = 0;	hextab ["8"] = 8;
+	hextab ["1"] = 1;	hextab ["9"] = 9;
+	hextab ["2"] = 2;	hextab ["A"] = hextab ["a"] = 10
+	hextab ["3"] = 3;	hextab ["B"] = hextab ["b"] = 11;
+	hextab ["4"] = 4;	hextab ["C"] = hextab ["c"] = 12;
+	hextab ["5"] = 5;	hextab ["D"] = hextab ["d"] = 13;
+	hextab ["6"] = 6;	hextab ["E"] = hextab ["e"] = 14;
+	hextab ["7"] = 7;	hextab ["F"] = hextab ["f"] = 15;
+	if ("'"$EncodedLF"'" == "yes") EncodedLF = 1; else EncodedLF = 0
+    }
+    {
+    	decoded = ""
+	i   = 1
+	len = length ($0)
+	while ( i <= len ) {
+	    c = substr ($0, i, 1)
+	    if ( c == "%" ) {
+	    	if ( i+2 <= len ) {
+		    c1 = substr ($0, i+1, 1)
+		    c2 = substr ($0, i+2, 1)
+		    if ( hextab [c1] == "" || hextab [c2] == "" ) {
+			print "WARNING: invalid hex encoding: %" c1 c2 | \
+				"cat >&2"
+		    } else {
+		    	code = 0 + hextab [c1] * 16 + hextab [c2] + 0
+		    	#print "\ncode=", code
+		    	c = sprintf ("%c", code)
+			i = i + 2
+		    }
+		} else {
+		    print "WARNING: invalid % encoding: " substr ($0, i, len - i)
+		}
+	    } else if ( c == "+" ) {	# special handling: "+" means " "
+	    	c = " "
+	    }
+	    decoded = decoded c
+	    ++i
+	}
+	if ( EncodedLF ) {
+	    printf "%s", decoded	# no line newline on output
+	} else {
+	    print decoded
+	}
+    }
+' -  
+}
+
+### ----------------------------------------------------------------- 
+# old and not alaways working version
+
+XConvertString() {
+  typeset SRC_STRING="$*"
+  bash -c "printf '$( echo "$( echo "${SRC_STRING}" | tr "+" " " )" | sed 's/%/\\x/g' )' " 
+}
+
+### ----------------------------------------------------------------- 
+## substr
+##
+## get a substring of a string
+##
+## usage: variable=$( substr sourceStr pos length )
+##     or substr sourceStr pos length resultStr
+##
+## returns: 1 - parameter missing
+##          0 - parameter okay
+##
+substr() {
+  typeset resultstr=""
+  typeset THISRC=1
+
+  if [ "$1"x != ""x ] ; then 
+    typeset s=$1
+    typeset p=$2
+    typeset l=$3
+    [ "$l"x = ""x ] && l=${#s}
+    [ "$p"x = ""x ] && p=1
+    resultstr="$( echo $s | cut -c${p}-$((${p}+${l}-1)) )"
+    THISRC=0
+  else
+    THISRC=1
+    resultstr="$1"
+  fi
+
+  if [ "$4"x != ""x ] ; then
+    eval $4=\"${resultstr}\" 
+  else
+    echo ${resultstr}
+  fi
+
+  return ${THISRC}
+}
+
+### ----------------------------------------------------------------- 
+
+LogMsg() {
+  typeset THISMSG="$*"
+  [ "${PAGE_TYPE}" = "html" ] && echo "${THISMSG}<br>" || echo "${THISMSG}"
+}
+
+### ----------------------------------------------------------------- 
+
+LogErrorMsg() {
+  typeset THISMSG="$*"
+  LogMsg "ERROR: ${THISMSG}"
+}
+
+
+### ----------------------------------------------------------------- 
+
+LogMsgColored() {
+  typeset THISMSG="$*"
+  [ "${PAGE_TYPE}" = "html" ] && echo "<span style=\"color: rgb(0, 153, 0);\">${THISMSG}<br></span>" || echo "${THISMSG}"
+}
+
+### ----------------------------------------------------------------- 
+
+LogErrorMsgColored() {
+  typeset THISMSG="$*"
+  LogMsg "<span style=\"color: rgb(255, 0, 0);\">ERROR: ${THISMSG}</span>"
+}
+
+
+### ----------------------------------------------------------------- 
+
+LogWarningMsgColored() {
+  typeset THISMSG="$*"
+  LogMsg "<span style=\"color: rgb(255, 255, 0);\">WARNING: ${THISMSG}</span>"
+}
+
+### ----------------------------------------------------------------- 
+
+LogWarningMsg() {
+  typeset THISMSG="$*"
+  LogMsg "WARNING: ${THISMSG}"
+}
+
+### ----------------------------------------------------------------- 
+
+LogInfoMsg() {
+  typeset THISMSG="$*"
+  LogMsg "INFO: ${THISMSG}"
+}
+
+### ----------------------------------------------------------------- 
+
+
+GetXrefFileVersion() {
+  typeset THISFILE="$1"
+  
+  typeset XREF_VERSION=""
+  typeset XREF_HEADER_MARKER="## PATCHDIAG TOOL CROSS-REFERENCE FILE AS OF"  
+ 
+  if [ -f ${PATCHDIAG_XREF_FILE} ] ; then
+    XREF_VERSION=$( grep "${XREF_HEADER_MARKER}" ${THISFILE} )
+    XREF_VERSION=${XREF_VERSION#*AS OF}
+    XREF_VERSION=${XREF_VERSION%*##}
+ fi
+
+ echo ${XREF_VERSION}
+}  
+
+
+### ----------------------------------------------------------------- 
+
+PrintPageHeader() {
+
+  if [ "${PAGE_TYPE}" = "html" ] ; then
+  
+    cat <<EOT
+Content-type: text/html
+
+<html>
+<head>
+<meta content="text/html; charset=ISO-8859-1" 
+http-equiv="content-type"> 
+<title>Patchdiag xref </title>
+</head>
+<body style="background-color: rgb(153, 173, 204);">
+
+EOT
+  else
+
+    cat <<EOT
+Content-type: text/plain
+
+EOT
+  
+  fi
+}
+
+### ----------------------------------------------------------------- 
+
+PrintPageFooter() {
+  if [ "${PAGE_TYPE}" = "html" ] ; then
+    echo "</body>"
+    echo "</html>"
+  else
+    echo ""
+  fi        
+}
+
+### ----------------------------------------------------------------- 
+
+PrintEmptyFrame() {
+  PrintPageHeader
+  PrintPageFooter
+
+}
+
+### ----------------------------------------------------------------- 
+
+PrintFrameSet() {
+
+  cat <<EOT 
+Content-type: text/html
+
+<html>
+<head>
+<meta content="text/html; charset=ISO-8859-1" 
+http-equiv="content-type"> 
+<title>
+Patchdiag.xref - Analyse 
+</title>
+</head>
+<frameset border=3 frameborder="yes" framespacing=2 rows="305,* ">
+<frame name="patch_links" src=/cgi-bin/${__SCRIPTNAME}?ACTION=NAVIGATION >
+<frame name="patch_rechts" src=/cgi-bin/${__SCRIPTNAME}?ACTION=NEWS>
+</frameset>
+</html> 
+EOT
+  return 0
+}
+
+### ----------------------------------------------------------------- 
+
+PrintNewsPage() {
+  PrintPageHeader
+
+cat <<EOT
+<a name="top"></a>
+${AUTHOR_MESSAGE}
+If you are using ${__SCRIPTNAME} the first time on this server please check the
+<a href="/cgi-bin/${__SCRIPTNAME}?ACTION=CHECK_REQ">prerequisites</a>.
+before using it
+<br>
+Be aware that you must login to <a title="Oracle online support portal" target=oracale_login href="${ORACLE_ONLINE_PORTAL}">${ORACLE_ONLINE_PORTAL}</a> prior to downloading patches!
+<br>
+<strong>Please be aware that this script does NOT check the input for backquotes!
+This maybe a security hole in your environment!</strong>
+<hr>
+<center>
+<a href="#news">News</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#history">History</a><br>
+</center>
+<hr>
+<h1><a name="news">News</a></h1>
+
+<p>
+<table border="1">
+<tr>
+<th><strong>date</strong></th>
+<th><strong>version</strong></th>
+<th><strong>author</strong></th>
+<th><strong>comment</strong></th>
+</tr>
+
+<tr>
+<td>12/08/2011</td>
+<td>0.0.6</td>
+<td>/bs</td>
+<td>changed script to use Oracle instead of Sun</td>
+</tr>
+
+</table>
+</p>
+
+
+<p>
+<a href="#top">Back to top</a><br>
+</p>
+
+
+<hr>
+
+<h1><a name="history">History<a></h1>
+
+<p>
+<table border="1">
+<tr>
+<th><strong>date</strong></th>
+<th><strong>version</strong></th>
+<th><strong>author</strong></th>
+<th><strong>comment</strong></th>
+</tr>
+
+<tr>
+<td>12/08/2011</td>
+<td>0.0.6</td>
+<td>/bs</td>
+<td>changed script to use Oracle instead of Sun</td>
+</tr>
+
+<tr>
+<td>04/01/2005</td>
+<td>0.0.3</td>
+<td>/bs</td>
+<td>made the local patch directory variable;<br>
+much better performance now</td></td>
+</tr>
+
+<tr>
+<td>03/07/2005</td>
+<td>0.0.2</td>
+<td>/bs</td>
+<td>still work in progress</td>
+</tr>
+
+<tr>
+<td>03/04/2005</td>
+<td>0.0.1</td>
+<td>bs</td>
+<td>initial release</td>
+</tr>
+
+</table>
+</p>
+
+<p>
+<a href="#top">Back to top</a><br>
+</p>
+
+EOT
+
+  
+  PrintPageFooter
+}
+
+### ----------------------------------------------------------------- 
+
+Print_NavigationFrame() {
+
+# get possible OS versions
+  typeset OS_VERSIONS=""
+  typeset HW_VERSIONS=""
+  typeset CURENTRY=""
+  typeset PATCHFILE_MSG=""
+  typeset PRINT_NAME=""
+   
+  OS_VERSIONS="$( grep -v '#' ${PATCHDIAG_XREF_FILE} |  cut -f8 -d '|' | sort | uniq )"
+
+if [ -f "${PATCHDIAG_XREF_FILE}" ] ; then  
+  PRINT_NAME="${PATCHDIAG_XREF_FILE##*/}"
+
+  PATCHFILEMSG="
+<br>
+<strong>
+<a href="/cgi-bin/${__SCRIPTNAME}?ACTION=VIEW_PATCHDIAG_XREF" target=patch_rechts >View ${PRINT_NAME}</a>
+</strong>
+<br>
+Current version: $( GetXrefFileVersion ${PATCHDIAG_XREF_FILE} )
+<hr>"
+else
+  PATCHFILEMSG="<strong>Warning: Patchdiag.xref file not found</strong><hr>"
+fi
+
+# create the html code for the OS listbox
+  OS_LISTBOX="<select name=PATCH_OS  size="1" ><option selected>all</option>"
+  for CURENTRY in ${OS_VERSIONS} ; do
+    if [[ ${CURENTRY} = "10" ]] ; then
+      OS_LISTBOX="${OS_LISTBOX}<option selected>${CURENTRY}</option>"
+    else
+      OS_LISTBOX="${OS_LISTBOX}<option>${CURENTRY}</option>"
+    fi      
+  done
+  OS_LISTBOX="${OS_LISTBOX}</select>"
+
+# create the html code for the architecture listbox
+#  HW_VERSIONS="$( grep -v "^#" ${PATCHDIAG_XREF_FILE} | cut -f9 -d "|" | tr ";" " " | tr " " "\n"  | grep -v "^[0-9]" | grep -v "^ $"  | sort | uniq)"
+
+  HW_VERSIONS="$( grep -v "^#" ${PATCHDIAG_XREF_FILE} | cut -f9 -d "|" | tr ";" "\n" | grep -v "^[0-9]" | grep -v "^ $"  | sort | uniq)"
+    
+  HW_LISTBOX="<select name=PATCH_ARC size="1"><option selected>all</option>"
+  for CURENTRY in ${HW_VERSIONS} ; do
+
+  HW_VERSIONS_COUNT="$( grep -v "^#" ${PATCHDIAG_XREF_FILE} | cut -f9 -d "|"  | grep "${CURENTRY}" | wc -l )"
+    if [[ ${CURENTRY} = "sparc" ]] ; then
+      HW_LISTBOX="${HW_LISTBOX}<option selected>${CURENTRY} (${HW_VERSIONS_COUNT})</option>"
+    else      
+      HW_LISTBOX="${HW_LISTBOX}<option>${CURENTRY} (${HW_VERSIONS_COUNT})</option>"
+    fi
+  done
+  HW_LISTBOX="${HW_LISTBOX}</select>"
+
+ cat <<EOT
+Content-type: text/html
+
+<html>
+<head>
+<meta content="text/html; charset=ISO-8859-1" 
+http-equiv="content-type"> 
+<title>
+Patchdiag.xref - Analyse Navigation
+</title>
+</head>
+
+<body style="background-color: rgb(153, 173, 204);">
+<table border=1>
+
+
+<tr>
+<th>
+  <enter>
+  ${AUTHOR_MESSAGE_SHORT}
+  ${PATCHFILEMSG}
+  <a href="http://www.sun.com" target="_blank">Sun/Oracle</a>
+  <br>
+  <a title="Community Sunsolve" href="http://wesunsolve.net" target="_blank">weSunsolve</a>
+  <br>
+  <a title="Oracle online support portal"  target=oracale_login href="${ORACLE_ONLINE_PORTAL}">${ORACLE_ONLINE_PORTAL}</a>
+  <br>
+  <a title="Patch check advanced homepage" href="http://www.par.univie.ac.at/solaris/pca/" target="_blank">pca</a>
+  </center>
+<th>
+
+<th>
+  <form action="/cgi-bin/${__SCRIPTNAME}" method="get" target="patch_rechts">
+  <!-- hier folgen die Formularelemente -->
+  <input name="ACTION" type="hidden" value="PATCH_LIST">
+  <p>
+  <strong>Select the OS version</strong>
+  <br>
+  ${OS_LISTBOX}
+  </p>
+
+  <p>
+  <strong>Select the Architecture</strong>
+  <br>
+  ${HW_LISTBOX}
+  </p>
+  
+  <p>
+  <strong>Search patches for (use a leading - to exclude a word)</strong>
+  <br>
+  <input name="FREETEXT" type="text" size="20" >
+  <br>
+  <input type="checkbox" name="CASE_SENSITIVE" value="Y" checked="checked">Case sensitiv
+  <input type="checkbox" name="DEBUG_SEARCH" value="Y">Debug
+  </p>
+
+  <p>
+  <input selected type="submit" value="Create list">
+  <input type="reset" value="Reset values">
+  </p>
+</th>
+
+<th>
+  <p>
+  <strong>Select the type of patches:</strong>
+  <br>
+
+  <table border="1">
+  <tr>
+  <th></th>
+  <th>only</th>
+  <th>not</th>
+  <th>n/a</th>
+  </tr>
+
+
+  <tr>
+  <th>Recommended</th>
+  <th><input type="radio" name="RECOMMENDED_PATCH" value="R" checked="checked"></th>
+  <th><input type="radio" name="RECOMMENDED_PATCH" value="r" ></th>
+  <th><input type="radio" name="RECOMMENDED_PATCH" value=""></th>
+  </tr>
+
+  <tr>
+  <th>Security</th>
+  <th><input type="radio" name="SECURITY_PATCH" value="S" checked="checked"></th>
+  <th><input type="radio" name="SECURITY_PATCH" value="s"></th>
+  <th><input type="radio" name="SECURITY_PATCH" value="" ></th>
+  </tr>
+ 
+  <tr>
+  <th>Obsolete</th>
+  <th><input type="radio" name="OBSOLETE_PATCH" value="O"></th>
+  <th><input type="radio" name="OBSOLETE_PATCH" value="o" checked="checked"></th>
+  <th><input type="radio" name="OBSOLETE_PATCH" value=""></th>
+  </tr>
+
+  <tr>
+  <th>Withdrawn</th>
+  <th><input type="radio" name="WITHDRAWN_PATCH" value="B"></th>
+  <th><input type="radio" name="WITHDRAWN_PATCH" value="b" checked="checked"></th>
+  <th><input type="radio" name="WITHDRAWN_PATCH" value=""></th>
+  </tr>
+
+  <tr>
+  <th>exist local</th>
+  <th><input type="radio" name="PATCH_MUST_EXIST_LOCAL" value="Y"></th>
+  <th><input type="radio" name="PATCH_MUST_EXIST_LOCAL" value="N"></th>
+  <th><input type="radio" name="PATCH_MUST_EXIST_LOCAL" value="" checked="checked"></th>
+  </tr>
+  </table>
+
+  <strong>Local Patch directory:</strong>
+  <br>
+  <form>
+  <input name="PATCH_DIRECTORY" value="${LOCAL_PATCH_DIRECTORY}" type="text" size="25" >
+  </form>
+
+</th>
+
+<th>
+  <strong>Download patchdiag.xref</strong>
+  <br>
+  <form action="/cgi-bin/${__SCRIPTNAME}" method="get" target="patch_rechts">
+  <input name="ACTION" type="hidden" value="GET_PATCHDIAG_XREF">
+  <input type="checkbox" name="USEPROXY" value="YES">Use Proxy
+  <br>
+  <table border="0">
+  <tr>
+  <th>Proxyuser:</th>
+  <th><input name="PROXYUSR" type="text" size="10" ></th>
+  </tr>
+
+  <tr>
+  <th>Proxypwd:</th>
+  <th><input name="PROXYPWD" type="password" size="10" ></th>
+  </tr>
+  </table>
+  <p>
+  <input type="submit" value="Download">
+  <input type="reset" value="Reset">
+  </p>
+  </form>
+
+  <hr>
+  <form action="/cgi-bin/${__SCRIPTNAME}" method="get" target="patch_rechts">
+  <input name="ACTION" type="hidden" value="CHECK_REQ">
+  <input type="submit" value="Check Prerequisites"><br>
+  <input type="checkbox" name="DEBUG_SEARCH" value="Y">Debug  
+  </form>
+
+  <hr>
+  <form action="/cgi-bin/${__SCRIPTNAME}" method="get" target="patch_links">
+  <input name="ACTION" type="hidden" value="NAVIGATION">
+  <input type="submit" value="Reload script">
+  </form>
+
+</th>
+
+
+<th>  
+  <form action="/cgi-bin/${__SCRIPTNAME}" target="_blank">
+  <input name="ACTION" type="hidden" value="DOWNLOAD_PATCH">
+  <strong>Download a patch</strong>
+  <br>
+  Patch Number: <input name="PATCH_NO" type="text" size="10" >
+  <br>
+  <p>
+  </p>
+
+
+
+  <br>
+  View Readme <input type="radio" name="SUBACTION" value="view" >
+  <br>
+  Get Patch <input type="radio" name="SUBACTION" value="download" checked="checked" >
+  <br>
+  <input type="submit" value="Download">
+  <input type="reset" value="Reset">
+  </form>
+</th>
+
+</tr>
+</body>
+</html> 
+EOT
+
+  return 0
+}
+
+# currently not used html code:
+#
+code_to_select_signed_unsigned='
+  <table border="1">
+  <tr>
+  <th>Signed Patch</th>
+  <th>yes <input type="radio" name="DOWNLOAD_SECURITY" value="Y" ></th>
+  <th>no <input type="radio" name="DOWNLOAD_SECURITY" value="N" checked="checked"></th>
+  </tr>
+  <tr>
+  <th>Download via</th>
+  <th>ftp <input type="radio" name="DOWNLOAD_METHOD" value="ftp" ></th>
+  <th>http <input type="radio" name="DOWNLOAD_METHOD" value="http" checked="checked" ></th>
+  </tr>
+  </table>
+'
+
+
+### ----------------------------------------------------------------- 
+ViewPatchDiagxref() {
+
+  [ ! -f ${PATCHDIAG_XREF_FILE} ] && die 1 "Patchdiag xref file ${PATCHDIAG_XREF_FILE} not found"
+
+  PAGE_TYPE="ascii"
+  PrintPageHeader
+
+  cat ${PATCHDIAG_XREF_FILE}
+  
+  PrintPageFooter
+}
+
+
+### ----------------------------------------------------------------- 
+
+PrintPatchListFrame() {
+
+  typeset CURWORD=""
+  
+  typeset STARTTIME=""
+  typeset ENDTIME=""
+  typeset GREP_STARTTIME=""
+  typeset GREP_ENDTIME=""
+  typeset PRINT_STARTTIME=""
+  typeset PRINT_ENDTIME=""
+
+  typeset P_EXCLUDE_WORDS=""
+  typeset P_INCLUDE_WORDS=""
+  typeset HELPSTRING=""
+    
+  [ ! -f ${PATCHDIAG_XREF_FILE} ] && die 1 "Patchdiag xref file ${PATCHDIAG_XREF_FILE} not found"
+
+  PrintPageHeader  
+
+# update alias for LOCAL_PATCH_DIRECTORY
+#
+  LOCAL_PATCHDIR_LINK="$( [ "${WEBSERVER_PATCH_DIR}"x != ""x ] && 
+    echo "<a href=\"/${WEBSERVER_PATCH_DIR}\" title=\"local patch directory\" target=\"_blank\">${LOCAL_PATCH_DIRECTORY}</a>" || \
+    echo "${LOCAL_PATCH_DIRECTORY}" )"
+
+  if [ 1 = 0 ] ; then
+    echo "<br>ACTION= \"${ACTION}\" "
+    echo "<br>PATCH_ARC = \"${PATCH_ARC}\" "
+    echo "<br>PATCH_OS = \"${PATCH_OS}\" "
+    echo "<br>RECOMMENDED_PATCH = \"${RECOMMENDED_PATCH}\" "
+    echo "<br>SECURITY_PATCH = \"${SECURITY_PATCH}\" "
+    echo "<br>OBSOLETE_PATCH = \"${OBSOLETE_PATCH}\" "
+    echo "<br>WITHDRAWN_PATCH = \"${WITHDRAWN_PATCH}\" "
+    echo "<br>PATCH_MUST_EXIST_LOCAL = \"${PATCH_MUST_EXIST_LOCAL}\" "
+    echo "<br>FREETEXT= \"${FREETEXT}\" "
+    echo "<br>SEARCHSTRING= \"${SEARCHSTRING}\" "
+  fi
+
+  STARTTIME=$( date -u )
+  
+  grep -v "^#" ${PATCHDIAG_XREF_FILE} | tr "!" "." | tr "|" "!" >${TMPFILE1}
+
+  LIST_OF_PATCHES=""
+  echo > "${TMPFILE3}"
+  
+  GREP_CMD=""
+
+#  [ "${PATCH_OS}"x != ""x ] && GREP_CMD="${GREP_CMD} | grep \"${PATCH_OS}\" "
+#  [ "${PATCH_ARC}"x != ""x ] && GREP_CMD="${GREP_CMD} | grep \"${PATCH_ARC}\" "
+
+  PATCH_OS=${PATCH_OS%%+*}
+  for CURWORD in ${PATCH_OS} ; do
+    GREP_CMD="${GREP_CMD} | grep \"${CURWORD%+*}\" "
+  done
+
+  PATCH_ARC=${PATCH_ARC%%+*}
+  for CURWORD in ${PATCH_ARC} ; do
+    GREP_CMD="${GREP_CMD} | grep \"${CURWORD%+*}\" "
+  done
+
+  [ "${RECOMMENDED_PATCH}"x = "R"x ] && GREP_CMD="${GREP_CMD} | grep  \"!R!\" "
+  [ "${RECOMMENDED_PATCH}"x = "r"x ] && GREP_CMD="${GREP_CMD} | grep -v \"!R!\" "
+
+  [ "${SECURITY_PATCH}"x = "S"x ] && GREP_CMD="${GREP_CMD} | grep \"!S!\" "
+  [ "${SECURITY_PATCH}"x = "s"x ] && GREP_CMD="${GREP_CMD} | grep -v \"!S!\" "
+
+  [ "${OBSOLETE_PATCH}"x = "O"x ] && GREP_CMD="${GREP_CMD} | grep \"!O!\" "
+  [ "${OBSOLETE_PATCH}"x = "o"x ] && GREP_CMD="${GREP_CMD} | grep -v \"!O!\" "
+
+  [ "${WITHDRAWN_PATCH}"x = "B"x ] && GREP_CMD="${GREP_CMD} | grep \"B!\" "
+  [ "${WITHDRAWN_PATCH}"x = "b"x ] && GREP_CMD="${GREP_CMD} | grep -v \"B!\" "
+
+  if [[ "${CASE_SENSITIVE}" == "Y" ]] ; then
+    GREP_OPTIONS=""
+  else
+    GREP_OPTIONS="-i"
+  fi    
+
+  for CURWORD in ${SEARCHSTRING} ; do
+
+#    GREP_CMD="${GREP_CMD} | grep ${GREP_OPTIONS} \"${CURWORD}\" "
+
+    substr "${CURWORD}" 1 1 CURSTR
+    substr "${CURWORD}" 2 100 CURSTR1
+
+    case ${CURSTR} in
+      "+" ) 
+       GREP_CMD="${GREP_CMD} | grep ${GREP_OPTIONS} \"${CURSTR1}\" "
+       P_INCLUDE_WORDS="${P_INCLUDE_WORDS} ${CURSTR1}" 
+      
+       ;;
+
+      "-" )
+       GREP_CMD="${GREP_CMD} | grep ${GREP_OPTIONS} -v \"${CURSTR1}\" "
+       P_EXCLUDE_WORDS="${P_EXCLUDE_WORDS} ${CURSTR1}" 
+       ;;
+
+       * )
+       GREP_CMD="${GREP_CMD} | grep ${GREP_OPTIONS} \"${CURWORD}\" "
+       P_INCLUDE_WORDS="${P_INCLUDE_WORDS} ${CURWORD}" 
+      ;;      
+
+    esac
+  done
+
+  if [ "${DEBUG_SEARCH}"x = "Y"x ] ; then
+    echo "<br>"
+    echo "The grep command used is \"${GREP_CMD}\" "
+    echo "<br>"
+  fi
+   
+#  [ "${SEARCHSTRING}"x != ""x ] && GREP_CMD="${GREP_CMD} | grep \"${SEARCHSTRING}\" "
+
+  if [ "${P_INCLUDE_WORDS}"x != ""x ] ; then
+    HELPSTRING="${HELPSTRING} Searching for: <strong>${P_INCLUDE_WORDS}</strong><br>"
+  fi
+
+  if [ "${P_EXCLUDE_WORDS}"x != ""x ] ; then
+    HELPSTRING="${HELPSTRING} Ignoring lines containing: <strong>${P_EXCLUDE_WORDS}</strong><br>"
+  fi
+  
+  cat <<EOT  
+<a name="top"></a>
+<br>
+The <a title="jump to list of patches" href="#list_of_patches">list of patches</a> 
+(e.g for using in a script or something similar)
+and the
+<a title="jump to search statistics" href="#search_statistics">statistics of the search</a>  
+are at the end of this page 
+<br>
+see <a title="patchdiag.xref field descriptions" target="_blank" href="https://support.oracle.com/CSP/main/article?cmd=show&type=NOT&doctype=REFERENCE&id=1019527.1">this page</a> for an explanation of the fields in the file patchdiag.xref
+<br>
+${HELPSTRING}
+<hr>
+
+EOT
+
+  if [[ ${PATCH_MUST_EXIST_LOCAL} != "" ]] ; then
+    if [ -d "${LOCAL_PATCH_DIRECTORY}" ] ; then
+      echo "Using the local patch directory <strong>\"${LOCAL_PATCHDIR_LINK}\"</strong>"
+    else
+      echo "WARNING: The local patch directory <strong>\"${LOCAL_PATCH_DIRECTORY}\"</strong> does not exist"
+    fi
+   echo "<hr>"
+  fi
+
+#  ls -l ${TMPFILE1}
+#  echo "<br>"
+
+  GREP_STARTTIME="$( date )"
+  eval "cat ${TMPFILE1} ${GREP_CMD}  >${TMPFILE2}" 2>/dev/null
+  GREP_ENDTIME="$( date )"
+
+#  echo "<br>"
+#  ls -l ${TMPFILE2}
+#  echo "<br>"
+#  cp ${TMPFILE1} /tmp/test.456
+  cp ${TMPFILE2} /tmp/test.457
+
+  grep "^##" ${PATCHDIAG_XREF_FILE} | while read d0 ; do
+    echo "${d0}<br>"
+  done
+  
+  oIFS="º{IFS}"
+  IFS="!"
+  export IFS
+
+  cat <<EOT
+<table style="width: 100%; text-align: left;" border="1" cellpadding="2" cellspacing="2">
+<tbody>
+<tr>
+<td style="vertical-align: top;"><span style=\"font-weight: bold;\">Patch</span><br>
+</td>
+<td style="vertical-align: top;"><span style=\"font-weight: bold;\">Revision</span><br>
+</td>
+<td style="vertical-align: top;"><span style=\"font-weight: bold;\">Release</span><br>
+
+</td>
+<td style="vertical-align: top;"><span style=\"font-weight: bold;\">exists local?</span><br>
+</td>
+
+</td>
+<td style="vertical-align: top;"><span style=\"font-weight: bold;\">Rec.</span><br>
+</td>
+<td style="vertical-align: top;"><span style=\"font-weight: bold;\">Security</span><br>
+</td>
+<td style="vertical-align: top;"><span style=\"font-weight: bold;\">Obsolete</span><br>
+</td>
+<td style="vertical-align: top;"><span style=\"font-weight: bold;\">Withdrawn</span><br>
+</td>
+<td style="vertical-align: top;"><span style=\"font-weight: bold;\">OS</span><br>
+</td>
+<td style="vertical-align: top; width: 50px;"><span style=\"font-weight: bold;\">Arc</span><br>
+</td>
+<td style="vertical-align: top; width: 50px;"><span style=\"font-weight: bold;\">pkgs</span><br>
+</td>
+<td style="vertical-align: top; width: 50px;"><span style=\"font-weight: bold;\">Description</span><br>
+</td>
+</tr>
+
+
+EOT
+
+  PRINT_STARTTIME="$( date)"
+
+  NO_OF_LOCAL_PATCHES=0
+  NO_OF_PATCHES_NOT_LOCAL=0
+  
+  PATCHES_NOT_LOCAL=""
+  PATCHES_EXIST_LOCAL=""
+  
+  while read __PATCHNO __PATCHREV __PATCHDATE __PATCH_REC __PATCH_SEC __PATCH_OBSOLETE __PATCH_WITHDRAWN \
+             __PATCH_OS __PATCH_ARC __PATCH_PKGS __PATCH_DESC ; do
+
+    [[ ! -z ${PATCH_ARC} && ! ${__PATCH_ARC} == *${PATCH_ARC}* ]] && continue
+    [[ ! -z ${PATCH_OS} && ! ${__PATCH_OS} == *${PATCH_OS}* ]] && continue
+       
+    [[ ${RECOMMENDED_PATCH} = "R" && ! ${__PATCH_REC} = "R" ]] && continue
+    [[ ${RECOMMENDED_PATCH} = "r" &&   ${__PATCH_REC} = "R" ]] && continue
+
+    [[ ${SECURITY_PATCH} = "S" && ! ${__PATCH_SEC} = "S" ]] && continue
+    [[ ${SECURITY_PATCH} = "s" &&   ${__PATCH_SEC} = "S" ]] && continue
+ 
+    [[ ${OBSOLETE_PATCH} = "O" && ! ${__PATCH_OBSOLETE} = "O" ]] && continue
+    [[ ${OBSOLETE_PATCH} = "o" &&   ${__PATCH_OBSOLETE} = "O" ]] && continue
+
+    [[ ${WITHDRAWN_PATCH} = "B"  && ! ${__PATCH_WITHDRAWN} == *B ]] && continue
+    [[ ${WITHDRAWN_PATCH} = "b"  &&   ${__PATCH_WITHDRAWN} == *B ]] && continue
+
+# echo "${__PATCH_OS} ${__PATCH_REC} ${__PATCH_SEC} ${__PATCH_OBSOLETE} ${__PATCH_WITHDRAWN}"
+
+#    if [[ ${SEARCHSTRING} != "" ]] ; then
+#      for CURWORD in ${SEARCHSTRING} ; do
+#        [[ ! "${__PATCHNO} ${__PATCHREV} ${__PATCHDATE} ${__PATCH_REC} ${__PATCH_SEC} ${__PATCH_OBSOLETE} ${__PATCH_WITHDRAWN} ${__PATCH_OS} ${__PATCH_ARC} ${__PATCH_PKGS} ${__PATCH_DESC}" ==  *${CURWORD}* ]] && continue    
+#      done
+#    fi
+
+
+     if [ -d ${LOCAL_PATCH_DIRECTORY}/${__PATCHNO}-${__PATCHREV} ] ; then
+       __PATCH_EXISTS_ON_LOCAL_FS="Y"	 
+       
+	LOCAL_README=${WEBSERVER_PATCH_DIR}/${__PATCHNO}-${__PATCHREV}/README.${__PATCHNO}-${__PATCHREV}
+	[ ! -r "${DOCUMENT_ROOT}/${LOCAL_README}" ] && LOCAL_README="" || \
+	  LOCAL_README="<a href=\"/${LOCAL_README}\" target=\"_blank\" title=\"Local readme for ${__PATCHNO}-${__PATCHREV}\">local readme</a>"
+
+        [ ! -d "${WEBSERVER_PATCH_DIR}/${__PATCHNO}-${__PATCHREV}" ] && LOCAL_PATCH="" \
+	  LOCAL_PATCH="<a href=\"/${WEBSERVER_PATCH_DIR}/${__PATCHNO}-${__PATCHREV}\" target=\"_blank\" title=\"List Local patch ${__PATCHNO}-${__PATCHREV}\">list patch</a>"
+     else
+       __PATCH_EXISTS_ON_LOCAL_FS="N"	      
+       LOCAL_PATCH="" 
+       LOCAL_README=""
+     fi
+
+     [[ ${PATCH_MUST_EXIST_LOCAL} = "Y" && ${__PATCH_EXISTS_ON_LOCAL_FS} = "N" ]] && continue
+     [[ ${PATCH_MUST_EXIST_LOCAL} = "N" && ${__PATCH_EXISTS_ON_LOCAL_FS} = "Y" ]] && continue
+
+
+#    LIST_OF_PATCHES="${LIST_OF_PATCHES} ${__PATCHNO}-${__PATCHREV}"
+#    (( NO_OF_PATCHES=NO_OF_PATCHES+1 ))
+
+    DOWNLOAD_PATCH_LINK="<a title=\"Download patch ${__PATCHNO}-${__PATCHREV}\" href=\"https://${ORACLE_WEBSITE_FOR_PATCHES}/all_unsigned/${__PATCHNO}-${__PATCHREV}.zip\">${__PATCHNO}-${__PATCHREV}</a>"
+    DOWNLOAD_PATCH_README_LINK="<a title=\"View patch ${__PATCHNO}-${__PATCHREV} readme\" target=patchdesc href=\"https://${ORACLE_WEBSITE_FOR_PATCHES}/readme/README.${__PATCHNO}-${__PATCHREV}\">Readme</a>"
+
+
+    if [[ -d ${LOCAL_PATCH_DIRECTORY}/${__PATCHNO}-${__PATCHREV} ]] ; then
+      PATCHES_EXIST_LOCAL="${PATCHES_EXIST_LOCAL} ${DOWNLOAD_PATCH_LINK}"
+      (( NO_OF_LOCAL_PATCHES = NO_OF_LOCAL_PATCHES + 1 ))
+    else
+      PATCHES_NOT_LOCAL="${PATCHES_NOT_LOCAL} ${DOWNLOAD_PATCH_LINK}"
+      (( NO_OF_PATCHES_NOT_LOCAL = NO_OF_PATCHES_NOT_LOCAL + 1 ))
+    fi
+ 
+#    echo  "${__PATCHNO}-${__PATCHREV}">>"${TMPFILE3}"    
+    echo "<a  title=\"View readme of patch ${__PATCHNO}-${__PATCHREV}\" target=patchdesc href=\"https://${ORACLE_WEBSITE_FOR_PATCHES}/readme/README.${__PATCHNO}-${__PATCHREV}\">${__PATCHNO}-${__PATCHREV}</a>">>"${TMPFILE3}" 
+    (( NO_OF_PATCHES=NO_OF_PATCHES+1 ))
+    
+    oIFS="${IFS}"
+    IFS=";"
+    set -- ${__PATCH_ARC}
+    if [[ $# > 0 ]] ; then
+      CUR_ARCS=$1
+      shift
+    fi
+
+    while [[ $# > 0 ]] ; do
+      CUR_ARCS="${CUR_ARCS}<br>$1"
+      shift
+    done
+    IFS="${oIFS}"
+
+    oIFS="${IFS}"
+    IFS=";"
+    set -- ${__PATCH_PKGS}
+    if  [[ $# > 0 ]] ; then
+      CUR_PKGS="$1"
+      shift
+    fi
+
+    while  [[ $# > 0 ]] ; do
+      CUR_PKGS="${CUR_PKGS}<br>$1"
+      shift
+    done
+    IFS="${oIFS}"
+
+    cat <<EOT
+
+<tr>
+<td style="vertical-align: top;">
+${DOWNLOAD_PATCH_LINK}
+<br>
+${DOWNLOAD_PATCH_README_LINK}
+</td>
+<td style="vertical-align: top;">${__PATCHREV}<br>
+</td>
+<td style="vertical-align: top;">${__PATCHDATE}<br>
+</td>
+<td style="vertical-align: top;">${__PATCH_EXISTS_ON_LOCAL_FS}<br>${LOCAL_README}<br>${LOCAL_PATCH}
+</td>
+<td style="vertical-align: top;">${__PATCH_REC}<br>
+</td>
+<td style="vertical-align: top;">${__PATCH_SEC}<br>
+</td>
+<td style="vertical-align: top;">${__PATCH_OBSOLETE}<br>
+</td>
+<td style="vertical-align: top;">${__PATCH_WITHDRAWN}<br>
+</td>
+<td style="vertical-align: top;">${__PATCH_OS}<br>
+</td>
+<td style="vertical-align: top; width: 50px;">${CUR_ARCS}<br>
+</td>
+<td style="vertical-align: top; width: 50px;">${CUR_PKGS}<br>
+</td>
+<td style="vertical-align: top; width: 50px;"><a  title="View readme of patch ${__PATCHNO}-${__PATCHREV}" target=patchdesc href="https://${ORACLE_WEBSITE_FOR_PATCHES}/readme/README.${__PATCHNO}-${__PATCHREV}">${__PATCH_DESC}</a><br>
+</td>
+</tr>
+
+EOT
+
+# <td style="vertical-align: top;"><a  href="https://${ORACLE_WEBSITE_FOR_PATCHES}/all_unsigned/${__PATCHNO}-${__PATCHREV}.zip">${__PATCHNO}-${__PATCHREV}</a><br>
+
+  done <${TMPFILE2}
+  IFS="${oIFS}"
+  
+  PRINT_ENDTIME="$( date)"
+
+  echo "</tbody>"
+  echo "</table>"
+  echo "<br>"
+
+  ENDTIME=$( date -u )
+  
+  cat <<EOT
+<hr>
+<h2><a name="search_statistics">Search Statistics</a></h2>
+<p>
+Search started at: ${STARTTIME}
+<br>
+Search ended at: ${ENDTIME}
+<br>
+Patches found: ${NO_OF_PATCHES} (local: ${NO_OF_LOCAL_PATCHES})
+</p>
+EOT
+
+if [ "${DEBUG_SEARCH}"x = "Y"x ] ; then
+  cat <<EOT
+<p>
+Grep started at: ${GREP_STARTTIME}
+<br>
+Grep ended at: ${GREP_ENDTIME}
+<br>
+</p>
+<p>
+Print started at: ${PRINT_STARTTIME}
+<br>
+Print ended at: ${PRINT_ENDTIME}
+<br>
+</p>
+  
+EOT
+fi
+
+  cat <<EOT
+<a href="#top">Back to top</a><br>
+<hr>
+<h2><a name="list_of_patches"></a>List of patches</h2>
+<br>
+The list of patches on this page is (${NO_OF_PATCHES} patches found):
+<p>
+$( cat "${TMPFILE3}" )
+</p>
+<a href="#top">Back to top</a><br>
+EOT
+ 
+   
+if [ -d ${LOCAL_PATCH_DIRECTORY} ] ; then
+  cat <<EOT
+<hr>
+<h2><a name="list_of_patches_not_local"></a>List of patches that do NOT exist local in ${LOCAL_PATCHDIR_LINK} (${NO_OF_PATCHES_NOT_LOCAL} patch(es))</h2>
+<p>
+${PATCHES_NOT_LOCAL}
+</p>
+<a href="#top">Back to top</a><br>
+
+<hr>
+<h2><a name="list_of_patches_exist_local"></a>List of patches that do exist local in ${LOCAL_PATCHDIR_LINK} (${NO_OF_LOCAL_PATCHES}) patch(es)</h2>
+<p>
+${PATCHES_EXIST_LOCAL}
+</p>
+<a href="#top">Back to top</a><br>
+EOT
+
+fi
+
+  PrintPageFooter
+  return 0 
+}  
+
+
+### ----------------------------------------------------------------- 
+
+CheckRequirements() {
+#  PAGE_TYPE="text"
+
+  typeset WGET_BINARY=""
+  typeset REQ_OK=0
+
+  PrintPageHeader
+
+# update alias for LOCAL_PATCH_DIRECTORY
+#
+  LOCAL_PATCHDIR_LINK="$( [ "${WEBSERVER_PATCH_DIR}"x != ""x ] && 
+    echo "<a href=\"/${WEBSERVER_PATCH_DIR}\" title=\"local patch directory\" target=\"_blank\">${LOCAL_PATCH_DIRECTORY}</a>" || \
+    echo "${LOCAL_PATCH_DIRECTORY}" )"
+
+  LogMsg "${AUTHOR_MESSAGE}"
+  LogMsg "<h1>Checking requirements ...</h1>"
+
+  LogMsg "This script is executed by the user <strong>${__USERID}</strong> on the host <strong>$( hostname )</strong> at <strong>$( date )</strong>."
+  LogMsg "The document root of the webserver is \"${DOCUMENT_ROOT}\" "
+  LogMsg "<a href=\"#RESULT\">Go to result</a>"
+  
+  if [ "${DEBUG_SEARCH}"x = "Y"x ] ; then
+    LogMsg "<a href=\"#DEBUG\">Go to debug infos</a>"
+  fi
+  
+#  echo "Debug Switch is : $DEBUG_SEARCH"
+  
+  LogMsg "<h2>Checking the directories ...</h2>"
+
+  if [ -d "${LOCAL_PATCH_DIRECTORY}" ] ; then
+    LogMsgColored "OK, the local patch directory \"${LOCAL_PATCH_DIRECTORY}\" exists."
+    
+    if [ "${WEBSERVER_PATCH_DIR}"x != ""x -a -d "${DOCUMENT_ROOT}/${WEBSERVER_PATCH_DIR}" ] ; then
+      LogMsgColored "OK, the local patch directory in the document root \"${WEBSERVER_PATCH_DIR}\" exists."    
+    else
+      LogInfoMsg "The local patch directory in the document root \"${WEBSERVER_PATCH_DIR}\" does NOT exist."    
+    fi
+  else
+    LogInfoMsg "The local patch directory \"${LOCAL_PATCH_DIRECTORY}\" does NOT exist."
+    LogMsg ""
+  fi
+
+  if [ -d "${PATCHDIAG_XREF_FILE_DIR}" ] ; then
+    LogMsgColored "OK, the directory for the xref file \"${PATCHDIAG_XREF_FILE_DIR}\" exists."
+
+    if [ -f ${PATCHDIAG_XREF_FILE} ] ; then
+      touch "${PATCHDIAG_XREF_FILE}" 2>/dev/null
+      THISRC=$?
+    else
+      touch "${PATCHDIAG_XREF_FILE}" 2>/dev/null
+      THISRC=$?
+      rm "${PATCHDIAG_XREF_FILE}" 2>/dev/null
+    fi 
+
+    if [ ${THISRC} -ne 0 ] ; then
+      LogErrorMsgColored "Can not write to the directory \"${PATCHDIAG_XREF_FILE_DIR}\""
+      LogInfoMsg "Make sure, that the user ${__USERID} can write in this directory"
+      LogMsg ""
+    else
+      touch "${PATCHDIAG_XREF_FILE}.$$" 2>/dev/null
+      if [ $? -ne 0 ] ; then
+        LogErrorMsgColored "Can not write the file \"${PATCHDIAG_XREF_FILE}.$$\""
+        LogInfoMsg "Make sure, that the user ${__USERID} can create new files in the directory \"${DIRNAME}\" "
+        LogMsg ""
+      else
+        rm "${PATCHDIAG_XREF_FILE}.$$" 2>/dev/null
+        LogMsgColored "OK, can write to the directory  \"${PATCHDIAG_XREF_FILE_DIR}\" "      
+      fi
+    fi
+    
+  else
+    LogErrorMsgColored "The directory for the xref file \"${PATCHDIAG_XREF_FILE_DIR}\" does NOT exist"
+    LogInfoMsg "Either create the directory or change the variable PATCHDIAG_XREF_FILE_DIR in the script"
+    LogMsg ""
+    REQ_OK=2
+  fi
+
+  touch "${TMPFILE1}" 2>/dev/null
+  if [ $? -eq 0 ] ; then
+    LogMsgColored "OK, can create and write to the temporary file \"${TMPFILE1}\" "
+  else
+    LogErrorMsgColored"Can NOT create and write to the temporary file \"${TMPFILE1}\" "
+    LogInfoMsg "Either change the permissions of the directory $(dirname ${TMPFILE1} ) or change the variable TMPFILE1 in the script"
+    LogMsg ""
+    REQ_OK=1 
+  fi        
+
+  touch "${TMPFILE2}" 2>/dev/null
+  if [ $? -eq 0 ] ; then
+    LogMsgColored "OK, can create and write to the temporary file \"${TMPFILE2}\" "
+  else
+    LogErrorMsgColored "Can NOT create and write to the temporary file \"${TMPFILE2}\" "
+    LogInfoMsg "Either change the permissions of the directory $(dirname ${TMPFILE2} ) or change the variable TMPFILE2 in the script"
+    LogMsg ""
+    REQ_OK=1 
+  fi        
+
+  LogMsg "<h2>Checking the binaries ...</h2>"
+
+  which wget | read WGET_BINARY dummy
+  if [ "${WGET_BINARY}" = "no" ] ; then
+    LogErrorMsgColored "Can not find wget in the PATH. "
+    LogInfoMsg "Make sure that wget is reachable via the PATH variable"
+    LogMsg ""
+    REQ_OK=1 
+  else
+    LogMsgColored "OK, wget is available via the PATH variable"
+  fi
+
+  which awk | read AWK_BINARY dummy
+  if [ "${AWK_BINARY}" = "no" ] ; then
+    LogErrorMsgColored "Can not find awk in the PATH. "
+    LogInfoMsg "Make sure that awk is reachable via the PATH variable"
+    LogMsg ""
+    REQ_OK=1 
+  else
+    LogMsgColored "OK, awk is available via the PATH variable"
+  fi
+
+  which wc | read WC_BINARY dummy
+  if [ "${WC_BINARY}" = "no" ] ; then
+    LogErrorMsgColored "Can not find wc in the PATH. "
+    LogInfoMsg "Make sure that wc is reachable via the PATH variable"
+    LogMsg ""
+    REQ_OK=1 
+  else
+    LogMsgColored "OK, wc is available via the PATH variable"
+  fi
+
+  LogMsg "<h2>Checking the access to the Oracle website ...</h2>"
+  OUTPUT="$( ${WGET_BINARY} -t1 -T3 --no-check-certificate -O /dev/null  https://${ORACLE_WEBSITE_FOR_PATCHES} 2>&1 )"
+  THISRC=$?
+  echo "${OUTPUT}" | while read LINE ; do
+    echo "${LINE}<br>"
+  done 
+
+  if [ ${THISRC} -ne 0 ] ; then
+    LogErrorMsgColored "Access to \"${ORACLE_WEBSITE_FOR_PATCHES}\" does not work"
+    LogMsg ""
+    REQ_OK=1 
+  else
+    LogMsgColored "OK, Access to \"${ORACLE_WEBSITE_FOR_PATCHES}\" does work"
+  fi
+  
+  if [ -f "${PATCHDIAG_XREF_FILE}" ] ; then
+    LogMsgColored "OK, the patchdiag xref file \"${PATCHDIAG_XREF_FILE}\" exist."
+  else
+    LogWarningMsgColored "The patchdiag xref file \"${PATCHDIAG_XREF_FILE}\" does NOT exist."
+    LogMsg "Please retrieve the patchdiag.xref file via the <strong>Get patchdiag.xref</strong> button and reload the navigation via the <strong>Reload Script</strong> button before doing anything else."
+  fi
+  
+  cat <<EOT
+<p>
+<strong>Note:</strong>
+<br>
+Use 
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;wget -O "${PATCHDIAG_XREF_FILE}" --no-check-certificate <a href="https://${ORACLE_WEBSITE_FOR_PATCHES}/reports/patchdiag.xref">https://${ORACLE_WEBSITE_FOR_PATCHES}/reports/patchdiag.xref</a>
+<br>
+to retrieve the patchdiag.xref file manual or via cron job
+</p>
+EOT
+
+  LogMsg "<a name=\"RESULT\"><h1> ----- Result: ----- </h1></a> "
+
+  if [ ${REQ_OK} != 0 ] ; then
+    LogErrorMsgColored "Please correct the errors before using this script"
+    LogMsg ""
+  else
+    LogMsgColored "OK, you can start using this script"
+    LogMsg "Do not forget to login to <a title=\"Oracle Support Portal\" target=\"_blank\" href=${ORACLE_ONLINE_PORTAL}>${ORACLE_ONLINE_PORTAL}</a> prior to downloading a patch (if not already done)"
+    LogMsg ""   
+  fi
+
+  if [ "${DEBUG_SEARCH}"x = "Y"x ] ; then
+    cat   <<EOT
+<br>
+<hr>
+<br>
+<h1><a name="DEBUG"> ----- Debug Infos: ----- </a></h1>
+<p>
+<strong>For debugging an error in the script please save the contents of this frame to a file and sent it to the author of the script</strong>
+</p>
+<strong>uname -a:</strong> $( uname -a )
+<br>
+<strong>id:</strong> $( id )
+<br>
+<strong>pwd:</strong> $( pwd )
+<br>
+<strong>variables:</strong>
+<br>
+EOT
+
+    set | while read LINE ; do
+      LogMsg "${LINE}"
+    done 
+
+    LogMsg "<br><strong>Environment:</strong><br>"
+    env | while read LINE ; do
+      LogMsg "${LINE}"
+    done 
+    
+    LogMsg "<br>"
+    LogMsg "<strong>Current process:</strong> $$<br>"
+    LogMsg "<strong>Current process tree:</strong><br>"
+    ps -ef | grep $$ | while read LINE ; do
+      LogMsg "${LINE}"
+    done 
+    LogMsg "<br>"
+
+    LogMsg "<strong>Current parent process:</strong> $PPID<br>"
+    LogMsg "<strong>Current parent process tree:</strong><br>"
+    ps -ef | grep $PPID | while read LINE ; do
+      LogMsg "${LINE}"
+    done 
+    LogMsg "<br>"   
+  fi
+  
+  PrintPageFooter
+
+}
+
+### ----------------------------------------------------------------- 
+
+DownloadPatch() {
+  typeset METHOD=""
+
+  [ "${PATCH_NO}"x = ""x ] && die 1 "No patchnumber entered"
+
+  PrintPageHeader
+
+
+  PATCH_ID=${PATCH_NO%-*}
+  PATCH_REV=${PATCH_NO#*-}
+
+  if [ "${DOWNLOAD_METHOD}"x = "ftp"x ] ; then
+    METHOD="f"
+  else
+    METHOD="h"
+  fi
+           
+  if [ "${DOWNLOAD_SECURITY}"x  = "Y"x ] ; then 
+    METHOD="${METHOD}s"
+  fi
+
+  if [ "${SUBACTION}"x = "download"x ]  ; then
+    cat <<EOT  
+    <head>
+<meta http-equiv="refresh" content="1; URL=https://${ORACLE_WEBSITE_FOR_PATCHES}/all_unsigned/${PATCH_ID}-${PATCH_REV}.zip">
+  <!-- ... andere Angaben im Dateikopf ... -->
+</head>
+<br>  
+</body>
+If the automatic redirection does not work, you can use this 
+<a href="https://${ORACLE_WEBSITE_FOR_PATCHES}/all_unsigned/${PATCH_ID}-${PATCH_REV}.zip">link</a>  
+to download the patch ${PATCH_NO}
+<br>
+</body>
+EOT
+  else
+    cat <<EOT  
+    <head>
+<meta http-equiv="refresh" content="1 URL=https://${ORACLE_WEBSITE_FOR_PATCHES}/readme/README.${PATCH_NO}">
+  <!-- ... andere Angaben im Dateikopf ... -->
+</head>
+<br>  
+</body>
+If the automatic redirection does not work, you can use this 
+<a href="https://${ORACLE_WEBSITE_FOR_PATCHES}/readme/README.${PATCH_NO}">link</a>
+to view the readme of the patch ${PATCH_NO}
+<br>
+</body>
+EOT
+  fi
+
+
+  PrintPageFooter
+}
+
+
+### ----------------------------------------------------------------- 
+
+RetrievePatchDiagxref() {
+
+  typeset THISRC=0
+  typeset XREF_VERSION=""
+  typeset BACKUP_FILE="${PATCHDIAG_XREF_FILE}.$$"
+
+  typeset WGET_PARAMETER=""  
+  PAGE_TYPE="text"
+  
+  PrintPageHeader
+
+#  LogMsg "USEPROXY=\"${USEPROXY}\""
+#  LogMsg "PROXYUSR=\"${PROXYUSR}\""
+#  LogMsg "PROXYPWD=\"${PROXYPWD}\""
+
+
+  if [ "${USEPROXY}"x = "YES"x ] ; then
+    
+    PROXYUSR=$( ConvertString ${PROXYUSR} )
+    PROXYPWD=$( ConvertString ${PROXYPWD} )
+
+    WGET_PARAMETER="--proxy-user=${PROXYUSR}  --proxy-passwd=${PROXYPWD}"
+  else
+    if [ "${PROXYPWD}"x != ""x -o "${PROXYUSR}"x != ""x ] ; then
+      LogMsg "Warning: Proxyuser or Proxypassword entered but Proxy Check box not ticked!"
+    fi
+  fi
+
+#  LogMsg "USEPROXY=\"${USEPROXY}\""
+#  LogMsg "PROXYUSR=\"${PROXYUSR}\""
+#  LogMsg "PROXYPWD=\"${PROXYPWD}\""
+
+  LogMsg "Downloading the current patchdiag.xref file to \"${PATCHDIAG_XREF_FILE}\" "
+
+  if [ ${THISRC} = 0 ] ; then
+    if [ -f ${XREF_DOWNLOAD_LOCKFILE} ] ; then
+      LogErrorMsg "Another download of the xref file is still running; can not run another."        
+      cat ${XREF_DOWNLOAD_LOCKFILE}
+      THISRC=1
+    else
+      echo "xref file download started at $( date ) " >${XREF_DOWNLOAD_LOCKFILE}
+      if [ $? -ne 0 ] ; then
+        LogErrorMsg "Can not create the lock file \"${XREF_DOWNLOAD_LOCKFILE}\""
+        THISRC=1
+      fi
+    fi     
+  fi
+  
+  if [ ${THISRC} = 0 ] ; then
+    which wget | read WGET_BINARY dummy
+    if [ "${WGET_BINARY}" = "no" ] ; then
+      LogErrorMsg "Can not find wget in the PATH. Please check the error and try again"
+      THISRC=1
+    fi
+  fi
+  
+  if [ ${THISRC} = 0 ] ; then  
+    if [ -f ${PATCHDIAG_XREF_FILE} ] ; then
+      LogInfoMsg "The existing patchdiag.xref file is from $( GetXrefFileVersion ${PATCHDIAG_XREF_FILE} )"
+
+      LogMsg "Creating a backup of the existing file in \"${BACKUP_FILE}\" ..."
+      mv ${PATCHDIAG_XREF_FILE} ${BACKUP_FILE} 
+      if [ $? -ne 0 ] ; then
+         LogErrorMsg "Error creating a backup of the existing file. Please check the error and try again."
+         THISRC=1
+      fi
+    else
+      LogInfoMsg "There is no existing patchdiag.xref file"
+    fi
+  fi
+
+  if [ ${THISRC} = 0 ] ; then
+    LogMsg "Calling wget ..."
+
+    wget ${WGET_PARAMETER} -O "${PATCHDIAG_XREF_FILE}" --no-check-certificate https://${ORACLE_WEBSITE_FOR_PATCHES}/reports/patchdiag.xref
+    THISRC=$?
+
+    if [ ! -s "${PATCHDIAG_XREF_FILE}" -o ${THISRC} != 0 ] ; then
+      LogErrorMsg "Error downloading the new patchdiag.xref file"
+      rm "${PATCHDIAG_XREF_FILE}" 2>/dev/null
+      if [ -f ${BACKUP_FILE} ] ; then
+        LogMsg "Now restoring the old version "
+        mv ${BACKUP_FILE} ${PATCHDIAG_XREF_FILE}
+      else
+        LogErrorMsg "Restoring of the old version not possible - No backup version found"	
+      fi	
+      THISRC=1
+    else
+      LogInfoMsg "New patchdiag.xref successfully downloaded."
+
+      LogInfoMsg "The new patchdiag.xref file is from $( GetXrefFileVersion ${PATCHDIAG_XREF_FILE} )"
+      rm ${BACKUP_FILE} 1>/dev/null 2>/dev/null
+      LogMsg ""
+      LogMsg "Please reload the navigation via the \"Reload Script\" button before doing anything else."
+      LogMsg ""
+
+    fi   
+  fi
+   
+  PrintPageFooter
+  return 0
+}
+
+
+### ----------------------------------------------------------------- 
+
+PrintErrorPage() {
+
+  typeset ERRORMSG=$*
+
+   PrintPageHeader
+
+cat <<EOT
+<p>
+<H1>${__SCRIPTNAME} - ERROR</H1>
+<p>
+${ERRORMSG}
+<p>
+EOT
+
+  PrintPageFooter
+
+  return 0
+}
+
+
+### ----------------------------------------------------------------- 
+
+LogDebugMsg() {
+  typeset THISMG="$*"
+  [[ "${DEBUG}" != "" ]] && echo "<br>${THISMSG}<br>"
+}
+
+
+### ----------------------------------------------------------------- 
+
+trap_exit() {
+  die 0
+}
+
+### ----------------------------------------------------------------- 
+
+die() {
+  typeset THISRC=$1
+  [ "$1"x != ""x ] && shift
+
+  if [ ${THISRC} != 0 ] ; then
+    PrintErrorPage "$*"
+  fi
+
+  [ "${TMPFILE1}"x != ""x -a -f ${TMPFILE1} ] && rm ${TMPFILE1} 1>/dev/null 2>/dev/null
+  [ "${TMPFILE2}"x != ""x -a -f ${TMPFILE2} ] && rm ${TMPFILE2} 1>/dev/null 2>/dev/null
+  [ "${TMPFILE3}"x != ""x -a -f ${TMPFILE3} ] && rm ${TMPFILE3} 1>/dev/null 2>/dev/null
+
+
+  [ "${PATCH_DOWNLOAD_LOCKFILE}"x != ""x -a -f ${PATCH_DOWNLOAD_LOCKFILE} ] && rm ${PATCH_DOWNLOAD_LOCKFILE}
+
+  [ "${XREF_DOWNLOAD_LOCKFILE}"x != ""x -a -f ${XREF_DOWNLOAD_LOCKFILE} ] && rm ${XREF_DOWNLOAD_LOCKFILE}
+
+  exit ${THISRC}
+}
+
+### ----------------------------------------------------------------- 
+  
+### main 
+  trap trap_exit exit
+
+  DEBUG=""
+
+  PAGE_TYPE="html"
+     
+  exec 2>&1
+  
+  __USERID=$( /usr/ucb/whoami || whoami )
+
+  PATH=$PATH:/usr/local/bin
+  export PATH
+
+  PATCH_DOWNLOAD_LOCKFILE="${LOCAL_PATCH_DIRECTORY}/.lock"
+  XREF_DOWNLOAD_LOCKFILE="${PATCHDIAG_XREF_FILE_DIR}/.lock"
+
+  TMPFILE1="/tmp/$( basename $0 )_1.$$.tmp"
+  TMPFILE2="/tmp/$( basename $0 )_2.$$.tmp"
+  TMPFILE3="/tmp/$( basename $0 )_3.$$.tmp"
+    
+# init variables
+  ACTION=""
+  PATCH_ARC=""
+  PATCH_OS=""
+  RECOMMENDED_PATCH=""
+  SECURITY_PATCH=""
+  OBSOLETE_PATCH=""
+  WITHDRAWN_PATCH=""
+  PATCH_MUST_EXIST_LOCAL="N"
+  FREETEXT=""
+
+  NO_OF_PATCHES=0  
+
+  LOCAL_PATCHDIR_LINK="$( [ "${WEBSERVER_PATCH_DIR}"x != ""x ] && 
+    echo "<a href=\"/${WEBSERVER_PATCH_DIR}\" title=\"local patch directory\" target=\"_blank\">${LOCAL_PATCH_DIRECTORY}</a>" || \
+    echo "${LOCAL_PATCH_DIRECTORY}" )"
+
+  oIFS="${IFS}"
+  IFS="&"
+  export IFS
+  set -- ${QUERY_STRING}
+  
+
+  while [[ "$1" != "" ]] ; do   
+    CURKEY="${1%=*}"
+    CURVALUE="${1#*=}"
+    eval "${CURKEY}=\"\$CURVALUE\" "
+    shift
+  done    
+  IFS="${oIFS}"
+
+  if [[ "${PATCH_DIRECTORY}" != "" ]] ; then
+    PATCH_DIRECTORY="$( ConvertString "${PATCH_DIRECTORY}" )"
+    if [ -f "${PATCH_DIRECTORY}" ] ; then
+      LOCAL_PATCH_DIRECTORY="$( dirname ${PATCH_DIRECTORY} )"
+    else
+      LOCAL_PATCH_DIRECTORY="${PATCH_DIRECTORY}"
+    fi
+  fi    
+
+#  [[ "${QUERY_STRING}" != "" ]] && ACTION="TEST"
+
+  if [[ "${FREETEXT}" != "" ]] ; then
+
+     SEARCHSTRING="$( ConvertString "${FREETEXT}" )"
+
+#    FREETEXT=$( echo "${FREETEXT}" | tr "+" " " )
+#    SEARCHSTRING=$( bash -c "printf '$( echo "${FREETEXT}" | sed 's/%/\\x/g' )' " )
+#    SEARCHSTRING=$( bash -c "printf '$( echo "${FREETEXT}" | sed 's/%/\\x/g' )' " )
+  fi
+
+#ACTION=PATCH_LIST
+#ACTION=CHECK_REQ
+#ACTION=GET_PATCHDIAG_XREF
+#ACTION=PATCH_LIST
+#PATCH_ARC="sparc"
+#PATCH_OS="9"
+#RECOMMENDED_PATCH="R"
+#SECURITY_PATCH="S"
+#OBSOLETE_PATCH="o"
+#WITHDRAWN_PATCH="b"
+#FREETEXT="cray"
+#PATCH_MUST_EXIST_LOCAL="N"
+
+
+
+  case ${ACTION} in
+
+    "TEST" )
+       PrintPageHeader
+
+       echo SERVER_SOFTWARE = $SERVER_SOFTWARE
+       echo "<br>"
+       echo SERVER_NAME = $SERVER_NAME
+       echo "<br>"
+       echo GATEWAY_INTERFACE = $GATEWAY_INTERFACE
+       echo "<br>"
+       echo SERVER_PROTOCOL = $SERVER_PROTOCOL
+       echo "<br>"
+       echo SERVER_PORT = $SERVER_PORT
+       echo "<br>"
+       echo REQUEST_METHOD = $REQUEST_METHOD
+       echo "<br>"
+       echo HTTP_ACCEPT = "$HTTP_ACCEPT"
+       echo "<br>"
+       echo PATH_INFO = "$PATH_INFO"
+       echo "<br>"
+       echo PATH_TRANSLATED = "$PATH_TRANSLATED"
+       echo "<br>"
+       echo SCRIPT_NAME = "$SCRIPT_NAME"
+       echo "<br>"
+       echo QUERY_STRING = "$QUERY_STRING"
+       echo "<br>"
+       echo REMOTE_HOST = $REMOTE_HOST
+       echo "<br>"
+       echo REMOTE_ADDR = $REMOTE_ADDR
+       echo "<br>"
+       echo REMOTE_USER = $REMOTE_USER
+       echo "<br>"
+       echo AUTH_TYPE = $AUTH_TYPE
+       echo "<br>"
+       echo CONTENT_TYPE = $CONTENT_TYPE
+       echo "<br>"
+       echo CONTENT_LENGTH = $CONTENT_LENGTH
+       echo "<br>"
+
+       echo "<br>ACTION= \"${ACTION}\" "
+       echo "<br>PATCH_ARC = \"${PATCH_ARC}\" "
+       echo "<br>PATCH_OS = \"${PATCH_OS}\" "
+       echo "<br>RECOMMENDED_PATCH = \"${RECOMMENDED_PATCH}\" "
+       echo "<br>SECURITY_PATCH = \"${SECURITY_PATCH}\" "
+       echo "<br>OBSOLETE_PATCH = \"${OBSOLETE_PATCH}\" "
+       echo "<br>WITHDRAWN_PATCH = \"${WITHDRAWN_PATCH}\" "
+       echo "<br>PATCH_MUST_EXIST_LOCAL = \"${PATCH_MUST_EXIST_LOCAL}\" "
+       echo "<br>FREETEXT= \"${FREETEXT}\" "
+       echo "<br>SEARCHSTRING= \"${SEARCHSTRING}\" "
+
+       PrintPageFooter
+       ;;
+       
+    "INIT_PAGE" | "" )
+       PrintFrameSet
+       ;;
+
+    "NEWS" )
+       PrintNewsPage
+       ;;
+            
+    "CHECK_REQ" )
+       CheckRequirements
+       ;;
+       
+    "EMPTY_PAGE" )
+       PrintEmptyFrame
+       ;;
+       
+    "NAVIGATION" )
+       Print_NavigationFrame
+       ;;
+       
+    "PATCH_LIST" ) 
+       [ "${PATCH_ARC}"x = "all"x ] && PATCH_ARC=""
+       [ "${PATCH_OS}"x = "all"x ] && PATCH_OS=""
+       PrintPatchListFrame 
+       ;;
+      
+    "GET_PATCHDIAG_XREF" )
+       RetrievePatchDiagxref
+       ;;
+
+    "VIEW_PATCHDIAG_XREF" )
+       ViewPatchDiagxref
+       ;;
+     
+     
+     
+    "DOWNLOAD_PATCH" )
+       DownloadPatch
+       ;;
+       
+    * )
+      PrintErrorPage "Internal Error: Unknown action \"${ACTION}\" "
+      ;;             
+
+  esac
+
+  
+die 0

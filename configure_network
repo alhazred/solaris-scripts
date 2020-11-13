@@ -1,0 +1,102 @@
+#!/bin/sh
+#
+# CDDL HEADER START
+#
+# The contents of this file are subject to the terms of the
+# Common Development and Distribution License, Version 1.0 only
+# (the "License").  You may not use this file except in compliance
+# with the License.
+#
+# You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
+# or http://www.opensolaris.org/os/licensing.
+# See the License for the specific language governing permissions
+# and limitations under the License.
+#
+# When distributing Covered Code, include this CDDL HEADER in each
+# file and include the License file at usr/src/OPENSOLARIS.LICENSE.
+# If applicable, add the following below this CDDL HEADER, with the
+# fields enclosed by brackets "[]" replaced with your own identifying
+# information: Portions Copyright [yyyy] [name of copyright owner]
+#
+# CDDL HEADER END
+#
+# Simple script to configure the network adapter according to th values of the nvramrc variable network-boot-arguments
+#
+# History
+#   07.11.2009 v1.0.0 /bs
+#       initial release for the Extended MilaX WANBOOT image v1.0.0
+#   09.11.2009 v1.0.1 /bs
+#       new version for the Extended MilaX WANBOOT image v1.0.1:
+#           added code to plumb the network adapter
+#           added code to handle multiple net aliasse
+#
+# Links:
+#   Description and Download links for the Extended MilaX WANBOOT image:
+#       http://wikis.sun.com/display/BigAdmin/Converting+the+MilaX+Live+CD+for+SPARC+to+a+WANBOOT+image#ConvertingtheMilaXLiveCDforSPARCtoaWANBOOTimage-MilaXWANBOOTimages
+#
+# Author
+#   Bernd.Schemmer@gmx.de
+#   http://www.bnsmb.de
+#
+#
+
+PATH=/usr/sbin/:/sbin:/usr/bin:/bin:${PATH}
+export PATH
+
+# get the contents of the nvramrc variable network-boot-arguments
+#
+eval ` eeprom network-boot-arguments | cut -f2- -d "=" | tr -s ",-" ";_"  `
+
+# result variables of the eval command:
+#
+# client_id=0AE1E784
+# file=http://10.224.164.136/cgi_bin/wanboot_cgi
+# host_ip=10.225.231.132.
+# hostname=rtdev01t1
+# router_ip=10.225.231.254
+# subnet_mask=255.255.255.128
+
+NETDEV=""
+NETWORK_DEVICE=`prtconf -vpPD | grep " net:"  | tr -s " " | cut -f3 -d " " | tr -d "'" ` 
+[ "${NETWORK_DEVICE}"x != ""x ] && NETDEV=` ls -l /dev | grep ${NETWORK_DEVICE}: | tr -s " " | cut -f9 -d " " `
+
+NETWORK_CONFIGURED=1
+
+if [ "${NETDEV}"x != ""x ] ; then
+      ifconfig  "${NETDEV}" plumb
+      CUR_IP=`ifconfig  "${NETDEV}" | grep inet | cut -f2 -d " " `
+      if [ "${CUR_IP}"x != "0.0.0.0"x ] ;then
+            echo "Network adapter "${NETDEV}" already configured:"
+            ifconfig "${NETDEV}"
+            echo "Nothing to do here"
+            NETWORK_CONFIGURED=0
+      fi
+
+      if [ "${NETWORK_CONFIGURED}" = 1 ] ; then
+            if [ "${NETDEV}"x != ""x -a "${host_ip}"x != ""x -a "$ {router_ip}"x != ""x -a "${subnet_mask}" != ""x ] ; then
+                  echo "Configuring the network ..."
+                  set -x
+                  ifconfig ${NETDEV} plumb  ${host_ip} netmask ${subnet_mask} broadcast + up
+                  route add default ${router_ip}
+                  set +x
+            else
+                  echo "Network configuration is incomplete -- can not configure the network."
+            fi
+      fi
+fi
+
+if [ "${hostname}"x != ""x ] ; then
+      echo "Configuring the nodename ..."
+      uname -S "${hostname}"
+      echo "${hostname}">/etc/nodename..
+      grep "${hostname}" /etc/hosts >/dev/null
+      if [ $? -ne 0 ] ; then
+            if [ "${host_ip}"x != ""x ] ; then
+                  echo ${host_ip} ${hostname} >>/etc/hosts
+            fi
+      else
+            echo "/etc/hosts already configured."
+      fi
+else
+      echo "Nodename not found in the nvram -- can not configure the nodename"
+fi

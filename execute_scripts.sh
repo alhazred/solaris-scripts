@@ -27,16 +27,16 @@
 # CDDL HEADER END
 #
 #
-# Copyright 2006-2017 Bernd Schemmer  All rights reserved.
+# Copyright 2006-2014 Bernd Schemmer  All rights reserved.
 # Use is subject to license terms.
 #
 # Notes:
 #
-# - use "execute_on_all_hosts.sh {-v} {-v} {-v} -h" to get the usage help
+# - use "execute_scripts.sh {-v} {-v} {-v} -h" to get the usage help
 #
-# - use "execute_on_all_hosts.sh -H 2>execute_on_all_hosts.sh.doc" to get the documentation
+# - use "execute_scripts.sh -H 2>execute_scripts.sh.doc" to get the documentation
 #
-# - use "execute_on_all_hosts.sh -X 2>execute_on_all_hosts.sh.examples.doc" to get some usage examples
+# - use "execute_scripts.sh -X 2>execute_scripts.sh.examples.doc" to get some usage examples
 #
 # - this is a Kornshell script - it may not function correctly in other shells
 # - the script was written and tested with ksh88 but should also work in ksh93
@@ -89,50 +89,17 @@
 ##EXAMPLE##    __CREATE_DUMP=/var/tmp/debug ./${__SCRIPTNAME}
 ##EXAMPLE##
 #
-# Note: The escape character in the commands below is only for the usage of execute_on_all_hosts.sh with the "-X" parameter!
+# Note: The escape character in the command below is only for the usage of execute_scripts.sh with the "-X" parameter!
 #
 ##EXAMPLE## # use logger instead of echo to print the messages
 ##EXAMPLE##
-##EXAMPLE##    LOGMSG_FUNCTION=\"logger -s -p user.info execute_on_all_hosts.sh\"  ./execute_on_all_hosts.sh
+##EXAMPLE##    LOGMSG_FUNCTION=\"logger -s -p user.info execute_scripts.sh\"  ./execute_scripts.sh
 ##EXAMPLE##
-##EXAMPLE##
-
-##EXAMPLE## # hint: add the parameter \"-d\" to the examples to execute them in parallel sessions
-##EXAMPLE## #
-##EXAMPLE##
-##EXAMPLE## # execute the command \"uname -a\" as user support on the list of hostnames from the file hostlist
-##EXAMPLE## #
-##EXAMPLE## ./execute_on_all_hosts.sh  -i hostlist -s \"uname -a\" -B
-##EXAMPLE##
-##EXAMPLE##
-##EXAMPLE## # execute the script \"testscript\" as user support on the list of hostnames from the file hostlist
-##EXAMPLE## # and for the host myhost.mydomain.de but not for the host host1.mydomain.de
-##EXAMPLE## # Use the interface \"a1\" to access the hosts
-##EXAMPLE## #
-##EXAMPLE## ./execute_on_all_hosts.sh  -i hostlist -s \"testscript\"  -K -D if=a1 -x host1.mydomain.de -A myhost.mydomain.de
-##EXAMPLE##
-##EXAMPLE##
-##EXAMPLE## # execute the command \"uname -a\" as root on the list of hostnames from the file hostlist,
-##EXAMPLE## # enable ForwardAgent for ssh and scp, cleanup and restore the known_hosts, use the user \"root\" for the ssh access
-##EXAMPLE## #
-##EXAMPLE## ./execute_on_all_hosts.sh  -i hostlist -s \"uname -a\" -B  +R -D enable_gh -u ssh:root
-##EXAMPLE##
-##EXAMPLE##
-##EXAMPLE## # execute the script \"testscript\" as root on the list of hostnames from the file hostlist and use the command
-##EXAMPLE## #    ssh -t -t -A -l ghuser goldenhost sls -c <user>@<targethost_shortname> <command>
-##EXAMPLE## # to access the host via an golden host
-##EXAMPLE##
-##EXAMPLE##
-##EXAMPLE## # execute the script \"testscript\" on non-Deuba machines as user support
-##EXAMPLE## #
-##EXAMPLE## ./execute_on_all_hosts.sh  -i hostlist_fms -s testscript -u ssh:root -t ssh:\"%b %k %o -t -t -A -l ghuster goldenhost sls -c %u@%H '%s' \"
-##EXAMPLE##
-##EXAMPLE## #
 
 # -----------------------------------------------------------------------------
 ####
-#### execute_on_all_hosts.sh - copy a script to a list of hosts via scp and execute it on the hosts using ssh
-####
+#### execute_scripts.sh - execute scripts parallel or sequentiell
+####../../../../
 #### Author: Bernd Schemmer (Bernd.Schemmer@gmx.de)
 ####
 #### Version: see variable ${__SCRIPT_VERSION} below
@@ -144,7 +111,7 @@
 #### Description
 #### -----------
 ####
-#### copy a script to a list of hosts via scp and execute it on the hosts using ssh
+#### execute scripts either parallel or sequentiell
 ##C#
 ##C# Configuration file
 ##C# ------------------
@@ -153,17 +120,17 @@
 ##C# The configuration file is searched in the working directory,
 ##C# the home directory of the user executing this script and in /etc
 ##C# (in this order).
-##C#
+##C#../../../../
 ##C# The configuration file is read before the parameter are processed.
 ##C#
 ##C# To override the default config file search set the variable
 ##C# CONFIG_FILE to the name of the config file to use.
 ##C#
-##C# e.g. CONFIG_FILE=/var/myconfigfile ./execute_on_all_hosts.sh
+##C# e.g. CONFIG_FILE=/var/myconfigfile ./execute_scripts.sh
 ##C#
 ##C# To disable the use of a config file use
 ##C#
-##C#     CONFIG_FILE=none ./execute_on_all_hosts.sh
+##C#     CONFIG_FILE=none ./execute_scripts.sh
 ##C#
 ##C# See the variable __CONFIG_PARAMETER below for the possible entries
 ##C# in the config file.
@@ -190,21 +157,21 @@
 ##T#
 ##T# e.g
 ##T#
-##T#  __CREATE_DUMP=1 ./execute_on_all_hosts.sh
+##T#  __CREATE_DUMP=1 ./execute_scripts.sh
 ##T#
 ##T# will create a dump of the environment variables in the files
 ##T#
-##T#   /tmp/execute_on_all_hosts.sh.envvars.$$
-##T#   /tmp/execute_on_all_hosts.sh.exported_envvars.$$
+##T#   /tmp/execute_scripts.sh.envvars.$$
+##T#   /tmp/execute_scripts.sh.exported_envvars.$$
 ##T#
 ##T# before the script ends
 ##T#
-##T#  __CREATE_DUMP=/var/tmp/debug ./execute_on_all_hosts.sh
+##T#  __CREATE_DUMP=/var/tmp/debug ./execute_scripts.sh
 ##T#
 ##T# will create a dump of the environment variables in the files
 ##T#
-##T#   /var/tmp/debug/execute_on_all_hosts.sh.envvars.$$
-##T#   /var/tmp/debug/execute_on_all_hosts.sh.exported_envvars.$$
+##T#   /var/tmp/debug/execute_scripts.sh.envvars.$$
+##T#   /var/tmp/debug/execute_scripts.sh.exported_envvars.$$
 ##T#
 ##T# before the script ends (the target directory must already exist).
 ##T#
@@ -212,14 +179,14 @@
 ##T# error. To set the directory for these files use either
 ##T#
 ##T#   export __DUMPDIR=/var/tmp/debug
-##T#   ./execute_on_all_hosts.sh
+##T#   ./execute_scripts.sh
 ##T#
 ##T# or define __DUMPDIR in the script.
 ##T#
 ##T# To suppress creating the dump file in case of a syntax error add
 ##T# the statement
 ##T#
-##T# __DUMP_ALREADY_CREATED=0
+##T# __DUMP_ALREADY_CREATED=0../../../../
 ##T#
 ##T# to your script
 ##T#
@@ -235,15 +202,15 @@
 ##T#
 ##T# will create the files
 ##T#
-##T#   /var/debug/execute_on_all_hosts.sh.envvars.$$
-##T#   /var/debug/execute_on_all_hosts.sh.exported_envvars.$$
+##T#   /var/debug/execute_scripts.sh.envvars.$$
+##T#   /var/debug/execute_scripts.sh.exported_envvars.$$
 ##T#
 ##T#   CreateDump /var/debug pass2.
 ##T#
 ##T# will create the files
 ##T#
-##T#   /var/debug/execute_on_all_hosts.sh.envvars.pass2.$$
-##T#   /var/debug/execute_on_all_hosts.sh.exported_envvars.pass2.$$
+##T#   /var/debug/execute_scripts.sh.envvars.pass2.$$
+##T#   /var/debug/execute_scripts.sh.exported_envvars.pass2.$$
 ##T#
 ####  Note:
 ####    The default action for the signal handler USR1 is
@@ -309,149 +276,22 @@
 ####
 #### History:
 #### --------
-##   27.02.2008 v0.0.1 /bs
-##     initial release
-##   28.02.2008 v0.0.2 /bs
-##     added parameter hostlist, scriptfile, outputfile, and user
-##     added the parameter -U
-##     the script now supports multiple hostlists
-##   03.03.2008 v0.0.3 /bs
-##     added additional workarounds for CYGWIN
-##     added the parameter -I
-##     added a summary about failed hosts
-##     changed __ONLY_ONCE to ${__FALSE}
-##     added code to print a warning if ssh-agent is not running
-##   04.03.2008 v0.0.4 /bs
-##     changed the default output filename to "/var/tmp/${__SCRIPTNAME##*/}.$$.log"
-##     added code to call dos2unix for the script file if running in CYGWIN
-##   20.09.2008 v0.0.7 /bs
-##     added the option -K / --nostrictkeys
-##   20.04.2010 v0.0.8 /bs
-##     added RCM support
-##   22.12.2010 v0.0.9 /bs
-##     added an initial RCM access check
-##   30.03.2011 v0.0.10 /bs
-##     added the parameter -b / --ssh_keyfile
-##     added the parameter -B / +B
-##   27.05.2013 v1.0.0 /bs
-##     executeCommandAndLog rewritten using coprocesses (see also credits)
-##     Info update: executeCommandAndLog does now return the RC of the executed
-##                  command even if a logfile is defined
-##     replaced the runtime system with scriptt.sh v2.0.0
-##     the commands can now run in parallel in the background
-##     (parameter -d, -w, and -W)
-##
-##   06.06.2013 v1.1.0 /bs
-##     the parameter -W and now supports a syntax like -W /5 and the
-##     "/" can be replaced by ","
-##     the parameter -w and now supports a syntax like -w /5, -w /5/20,
-##     or -w //10. "/ "can be replaced by ","
-##     You can now use seconds, minutes, or hours for the time values
-##     of the parameter -w and -W can now
-##
-##   28.05.2014 v1.2.0 /bs
-##     use scriptt.sh v2.0.0.6
-##     added the parameter -x (--excludehost)
-##     added the parameter -A (--includehost)
-##     enhanced support for binaries
-##     enhanced support for binaries
-##     reworked the usage help
-##     replaced "which" whith "whence"
-##
-##   19.09.2014 v1.3.0 /bs
-##     the script now supports the format user@host
-##
-##   27.09.2014 v1.3.1 /bs
-##     added the keyword ignore_user_in_file for the parameter -D
-##     added the keyword do_not_sort_hostlist for the parameter -D
-##     added the keyword ssh_binary for the parameter -D
-##     added the keyword scp_binary for the parameter -D
-##     added the keyword dos2unix_binary for the parameter -D
-##
-##   24.07.2015 v2.0.0 /bs
-##     added support for different user for ssh and scp (parameter -u)
-##     added support for different ssh key files for the ssh and scp user
-##     added an option to list all hosts to the question to start the script
-##     added parameter to enable the forward agent for scp (parameter -D enable_ForwardAgent_for_scp)
-##     added support for templates for the scp usage (parameter -t scp:scp_template)
-##     added support for templates for the ssh usage (parameter -t ssh:ssh_template)
-##       The scp/ssh templates are useful if a golden host is used to access the machines
-##     added the debug options (parameter -D) from scriptt.sh version 2.1.0.7 21.07.2015
-##     added single step mode for sequential usage (parameter -D singlestep)
-##     added dry run mode (parameter -D dryrun)
-##     added a parameter to cleanup the known_hosts (parameter -D clean_known_hosts)
-##     added an example for golden host usage (parameter -D sls_db)
-##     added the parameter "-D if=xx"
-##     the parameter -K now also adds the options "-o NumberOfPasswordPrompts=0 -o ConnectTimeout=10"
-##       to scp and ssh if running in parallel mode
-##
-##   09.10.2015 v2.0.1 /bs
-##     added support for scp via sls; the sls parameter are now:
-##       -D sls_scp_db     sls for scp for DB
-##       -D sls_ssh_db     sls for ssh for DB
-##       -D sls_ssh_fms    sls for ssh for FMS
-##
-##       -D sls_fms        sls for scp and ssh for FMS
-##       -D sls_db         sls for scp and ssh for DB
-##
-##   24.10.2015 v2.1.0 /bs
-##     added support for field separators in the hostlist files (filename[:separator])
-##     added the keyword fieldsep=x to the parameter -D to change the default field separator
-##     added the keyword printargs to the parameter -D
-##     now the parameter -i hostlist is optional if -A hostname is used
-##     now the parameter -x hostexcludelist supports a leading "?" for
-##       optional hostexcludelist files
-##     reworked the messages written by the script (in normal mode and
-##     in verbose mode)
-##     the parameter "-x none" did not work --fixed
-##     the usage with "hostfile scriptfile .." did not work --fixed
-##     the script now reset the current terminal using "stty sane" at
-##     script end
-##     the parameter -K now also adds the options "-o BatchMode=yes -o PasswordAuthentication=no"
-##       to scp and ssh if running in parallel mode
-##
-##   27.10.2015 v2.2.0 /bs
-##     execute_on_all_hosts.sh now creates up to 10 backups of the logfile
-##     and rewrites the logfile every time.
-##     To overwrite the number of backups use the following syntax for
-##     the parameter -l:
-##
-##        -l logfile,[no_of_backups_of_the_logfile]
-##
-##     The default number of backups for the log file is configured in the variable
-##     MAX_NO_OF_LOGFILES
-##
-##   25.11.2015 v2.2.1 /bs
-##      the internal sed field separator is now "" so the pipe charachter
-##      "|" can be used in commands to execute again (see the variable SED_SEP)
-##
-##   25.08.2017 v2.2.2 /bs
-##      the parameter -t did not support templates with colon ":" - fixed
-##      the script printed in some circumstances the wrong number of hosts to process in the summary (There are 2 hosts to process) - fixed
-##
-##   26.08.2017 v2.2.3 /bs
-##      New macros for the parameter -D:
-##
-##       -D sls_scp_db_unxxx4     sls for scp for DB as user unxxx4
-##       -D sls_ssh_db_unxxx4     sls for ssh for DB as user unxxx4
-##       -D sls_db_unxxx4         sls for scp and ssh for DB as user unxxx4
-##       -D ticket_id=x           define ticket id for DB access
-##       -D use_ssh_wrapper       use my ssh and scp wrapper script for SLS
-##       -D no_use_ssh_wrapper    do not use my ssh and scp wrapper script for SLS
-##
-##      the ticket string set with the parameter "-D ticket_id=x" is now part of the
-##      default ssh and scp template (in the default the ticket string is empty)
-##
-##      improved some error messages to be more clear
-##      in the code to enable the forward agent for scp (ENABLE_FORWARD_AGENT_FOR_SCP_CODE)
-##        was a "=" missing so that it did not work -- fixed
-##
-##   
-##   11.01.2019 v2.2.4 /bs
-##      LogRuntimeInfo rewritten so that it runs on more ksh versions
-##      __ingoretraps deleted because it does not work in all ksh versions
-##      die now calls __unsettraps to reset the trap handler
-##
+####   1.0.0 07.06.2014 /bs
+####     initial release
+####
+####   1.0.1 09.01.2016 /bs
+####     die will now end the script even if the parameter -f is used
+####
+####   1.0.2 01.01.2017 /bs
+####     replaced "set -o noglob" with "set -f" and "set -o glob" with "set +f"  to be compatible with shells
+####     like mirksh that to not support the glob/noglob syntax
+####
+####   1.0.3 11.01.2019 /bs
+####     __ingoretraps does not work on all ksh versions -- deleted
+####     __unsettraps rewritten to work on more ksh versions
+####     die now calls __unsettraps
+####    LogRuntimeInfo rewritten to work on more ksh versions
+####    code using LINENO corrected
 ####
 ####
 #### script template History
@@ -483,7 +323,7 @@
 ####
 ####   1.22.6 09.08.2006 /bs
 ####      corrected some minor bugs
-####
+####.
 ####   1.22.7 17.08.2006 /bs
 ####      add the CheckParameterCount function
 ####      added the parameter -T
@@ -748,19 +588,18 @@
 ####      added the function PrintLine
 ####      added the debug options fn_to_stderr and fn_to_tty
 ####      max. return value for a function is 255 and therefor
-####        the function for the stack and the functions pos and lastpos
+####        the function for the stack and the functions pos and lastpo
 ####        now abort the script if a value greater than 255 should be returned
 ####      added the variables __HASHTAG, __SCRIPT_SHELL, and __SCRIPT_SHELL_OPTIONS
 ####
-####
-####
+
 #### ----------------
 #### Version variables
 ####
 #### __SCRIPT_VERSION - the version of your script
 ####
 ####
-typeset  -r __SCRIPT_VERSION="v2.2.4"
+typeset  -r __SCRIPT_VERSION="v1.0.3"
 
 ####
 
@@ -774,15 +613,10 @@ typeset -r __SCRIPT_TEMPLATE_VERSION="2.0.0.6 17.01.2014"
 ##R# Predefined return codes:
 ##R# ------------------------
 ##R#
-##R#    0 - ok, no error
 ##R#    1 - show usage and exit
 ##R#    2 - invalid parameter found
 ##R#
-##R#  210 - 255 reserved for the runtime system
-##R#  230 - Script does not exist or is not readable
-##R#  231 - Can not write to the file \"${CUR_VAR}\"
-##R#  232 - Function SyntaxHelp NOT defined.
-##R#  233 - Can not write to file handle 9
+##R#  210 - 233 reserved for the runtime system
 ##R#  234 - The return value is greater than 255 in function x
 ##R#  235 - Invalid debug switch found
 ##R#  236 - syntax error
@@ -828,7 +662,6 @@ __USED_ENVIRONMENT_VARIABLES="
 #### __RBAC_BINARY
 #### __TEE_OUTPUT_FILE
 #### __INFO_PREFIX
-#### __DEBUG_PREFIX
 #### __WARNING_PREFIX
 #### __ERROR_PREFIX
 #### __RUNTIME_INFO_PREFIX
@@ -880,7 +713,6 @@ alias __settraps="
   trap 'GENERAL_SIGNAL_HANDLER SIGUSR1   \${LINENO} \${__FUNCTION}' USR1
   trap 'GENERAL_SIGNAL_HANDLER SIGUSR2   \${LINENO} \${__FUNCTION}' USR2
 "
-
 
 # alias to reset all traps to the defaults
 #
@@ -1142,12 +974,6 @@ fi
 #  __FUNCTION_INIT=" eval __settraps; echo  \"Now in function \${__FUNCTION}\" "
   __FUNCTION_INIT=" eval __settraps "
 
-#### __FUNCTION_EXIT - code executed at end of every sub routine
-####   (see the hints for __DEBUG_CODE)
-####   Default exit code : ""
-####
-__FUNCTION_EXIT="eval __FUNCTION=\"\" "
-
 ### variables for debugging
 ###
 ### __NO_CLEANUP - do not call the cleanup routine at all at script end if ${__TRUE}
@@ -1193,13 +1019,6 @@ __FUNCTION_EXIT="eval __FUNCTION=\"\" "
 #
   __TRACE_LOGFILE="/tmp/${0##*/}.$$.trace"
 
-#### code for the ssh wrapper to enable the forward agent for scp
-####
-  ENABLE_FORWARD_AGENT_FOR_SCP_CODE="#!/usr/bin/perl
-
-exec '/usr/bin/ssh', map {\$_ eq '-oForwardAgent=no' ? (  ) : \$_} @ARGV;
-"
-
 #### __CONFIG_PARAMETER
 ####   The variable __CONFIG_PARAMETER contains the configuration variables
 ####
@@ -1214,23 +1033,9 @@ exec '/usr/bin/ssh', map {\$_ eq '-oForwardAgent=no' ? (  ) : \$_} @ARGV;
 __CONFIG_PARAMETER="__CONFIG_FILE_VERSION=\"${__SCRIPT_VERSION}\"
 "'
 
-# directory for temporary files in parallel mode if -U is not used
-#
-  TMP_OUTPUT_DIR=""
-
 # extension for backup files
 #
   DEFAULT_BACKUP_EXTENSION=".$$.backup"
-
-# MAX_NO_OF_LOGFILES - no. of backups for the log file
-#
-# Default: create up to 10 backups of the log file
-#
-  DEFAULT_MAX_NO_OF_LOGFILES=10
-
-# field  separator for sed commands
-#
-  DEFAULT_SED_SEP=""
 
 # allow the debug shell in AskUser
 #
@@ -1253,104 +1058,11 @@ __CONFIG_PARAMETER="__CONFIG_FILE_VERSION=\"${__SCRIPT_VERSION}\"
 ####
   DEFAULT_DUMP_DIR="${TMPDIR:-${TMP:-${TEMP:-/tmp}}}"
 
-
 # variables that can be changed via parameter
 #
 
-# interface of the hosts to use
-# default for the parameter -D if=xxx
-#
-  DEFAULT_HOST_INTERFACE=""
-
-# default RCM server
-# default for the parameter -D rcm_server=server
-#
-  DEFAULT_RCM_SERVER=""
-
-# remove the host from the known_hosts file
-# before executing ssh or scp
-# default for the parameter -D clean_known_hosts
-#
-  DEFAULT_CLEAN_KNOWN_HOSTS=${__FALSE}
-  DEFAULT_KNOWN_HOSTS_FILE="$HOME/.ssh/known_hosts"
-  DEFAULT_KNOWN_HOSTS_FILE_BACKUP="/var/tmp/known_hosts.$$.org"
-  DEFAULT_RESTORE_KNOWN_HOSTS=${__FALSE}
-
-# print the scp and ssh commands before executing them
-# default for the parameter -D print_cmd
-#
-  DEFAULT_PRINT_CMD=${__FALSE}
-
-# execute the commands in "single-step" mode
-# default for the parameter -D singlestep
-#
-  DEFAULT_SINGLE_STEP=${__FALSE}
-
-# variables for enable the forward agent for scp
-# default for the parameter -D enable_ForwardAgent_for_scp
-#
-  DEFAULT_SCP_WITH_FORWARD_AGENT_ENABLED=${__FALSE}
-# temp. ssh wrapper script to enable forward agent for scp
-  DEFAULT_SSH_WRAPPER_FOR_SCP="/tmp/ssh_wrapper.$$.sh"
-
-# default for the ssh template
-# default for the parameter -t ssh:ssh_template
-#
-  DEFAULT_SSH_TEMPLATE=" %b %o %k %t%u@%i %c %s "
-
-# DEFAULT_SCP_TEMPLATE - default for the scp template
-#                        default for the parameter -t scp:ssh_template
-#
-  DEFAULT_SCP_TEMPLATE=" %b %o %k %S %t%u@%i:%s "
-
-# DEFAULT_PREFIX - prefix for the dry run mode
-#                  default for the parameter -D dryrun
-#
-  DEFAULT_ECHO="$( which echo )"
-  DEFAULT_PREFIX=""
-
-# default for the parameter -b
-  DEFAULT_SSH_KEYFILE=""
-  DEFAULT_SCP_KEYFILE=""
-
-# default for the parameter -B
-  DEFAULT_DO_NOT_COPY_FILE=${__FALSE}
-
-# default for the parameter -K
-  DEFAULT_NOSTRICTKEYS=${__FALSE}
-
-# default for the parameter -i
-  DEFAULT_HOSTFILE=""
-
-# default for the parameter -I
-  DEFAULT_FILE_BASEDIR=""
-
-# default for the parameter -s
-  DEFAULT_SCRIPTFILE=""
-
 # default for the parameter -o
-  DEFAULT_OUTPUTFILE="/var/tmp/${__SCRIPTNAME##*/}.$$.cmds.log"
-
-# default for the parameter -u ssh
-  DEFAULT_SSHUSER="support"
-
-# default for the parameter -u for scp (def: use ssh user)
-  DEFAULT_SCPUSER=""
-
-# default for the parameter -c
-  DEFAULT_SHELL_TO_USE="/usr/bin/ksh"
-
-# default for the parameter -k
-  DEFAULT_ADD_COMMENTS=${__TRUE}
-
-# default for the parameter -U
-  DEFAULT_UNIQUE_LOGFILES=${__FALSE}
-
-# default for the parameter -P
-  DEFAULT_SSH_OPTIONS=""
-
-# default for the parameter -p
-  DEFAULT_SCP_OPTIONS=""
+  DEFAULT_WORKDIR="/var/tmp/${__SCRIPTNAME##*/}.$$.work"
 
 # execute the command in parallel? -- default for the parameter -d
   DEFAULT_EXECUTE_PARALLEL=${__FALSE}
@@ -1375,58 +1087,53 @@ __CONFIG_PARAMETER="__CONFIG_FILE_VERSION=\"${__SCRIPT_VERSION}\"
 #  -- 3rd default for the parameter -w
   DEFAULT_START_PROC_TIMEOUT=5m
 
-# hosts on the host exclude list -- default for the parameter -x
-  DEFAULT_EXCLUDE_HOSTS=""
 
-# hosts on the host include list -- default for the parameter -A
-  DEFAULT_INCLUDE_HOSTS=""
-
-# default for the RCM support
-  DEFAULT_COPY_TABLE_BINARY=$( whence copy_table.pl )
-  [ "${DEFAULT_COPY_TABLE_BINARY}"x = ""x ] && DEFAULT_COPY_TABLE_BINARY=$( whence copy_table.pl )
-  [ "${DEFAULT_COPY_TABLE_BINARY}"x = "no"x ] && DEFAULT_COPY_TABLE_BINARY=""
-  [ -x "${DEFAULT_COPY_TABLE_BINARY}" ] && DEFAULT_RCM_SUPPORT=${__TRUE} || DEFAULT_RCM_SUPPORT=${__FALSE}
-
-# ignore users from the hostlists (parameter -D ignore_user_in_file
+# scripts to execute  -- default for the parameter -i / -I
 #
-  DEFAULT_IGNORE_USER_IN_FILE=${__FALSE}
+  DEFAULT_SCRIPTLIST=""
 
-# do not sort the host list (parameter -D do_not_sort_hostlist)
+# scripts NOT to execute -- default for the parameter -x
 #
-  DEFAULT_DO_NOT_SORT_HOSTLIST=${__FALSE}
+  DEFAULT_SCRIPTEXCLUDE_LIST=""
 
-# ssh binary to use (parameter -D ssh_binary)
+# shell to use for script execution -- default for the parameter -c
 #
-  DEFAULT_NEW_SSH_BINARY=""
+  DEFAULT_SHELL_TO_USE="${__SCRIPT_SHELL}"
 
-# scp binary to use (parameter -D scp_binary)
+# add comments to the logfiles? -- default for the parameter -k
 #
-  DEFAULT_NEW_SCP_BINARY=""
+  DEFAULT_ADD_COMMENTS=${__TRUE}
 
-# dos2unix binary to use (parameter -D dos2unix_binary)
+# remove duplicate entries from the list of executables  -- default for the parameter -r
 #
-  DEFAULT_NEW_DOS2UNIX_BINARY=""
+  DEFAULT_REMOVE_DUPLICATES=${__FALSE}
 
-# default field separator for input files
+# start script -- default for the parameter -s
 #
-  DEFAULT_FIELD_SEPARATOR=" "
+  DEFAULT_STARTSCRIPT=""
+
+# start script -- default for the parameter -z
+#
+  DEFAULT_STOPSCRIPT=""
+
+# stop after a script returns non-zero? -- default for the parameter -B
+#
+  DEFAULT_STOP_AFTER_ERROR=${__FALSE}
+
+# no of lines of the logfile to list in case of an error -- defuaulf for the parameter -D no_of_error_loglines=n
+#
+  DEFAULT_NO_OF_ERROR_LOGLINES=10
+
+ # no of lines of the logfile to list in case of no error -- defuaulf for the parameter -D no_of_ok_loglines=n
+#
+  DEFAULT_NO_OF_OK_LOGLINES=5
+
+# no of lines of the logfile to list for parallel tasks -- defuaulf for the parameter -D no_of_logfile_lines=n
+#
+  DEFAULT_NO_OF_LOGFILE_LINES=10
 
 # variables that can NOT be changed with parameter
 
-# binaries used
-  DEFAULT_SSH_BINARY="ssh"
-  DEFAULT_SCP_BINARY="scp"
-  DEFAULT_DOS2UNIX_BINARY="$( whence dos2unix )"
-
-# defaults for the tickets for the DB access
-#
-  DEFAULT_TICKET_ID_STRING=""
-  DEFAULT_NEW_TICKET_ID=""
-  DEFAULT_USE_SSH_WRAPPER=${__TRUE}
-  DEFAULT_PASSTHROUGH_TICKET="9999"
-
-  DEFAULT_TICKET_STRING="ticket_id="
-  
 # only change the following variables if you know what you are doing #
 
 # no further internal variables defined yet
@@ -1440,7 +1147,7 @@ __CONFIG_PARAMETER="__CONFIG_FILE_VERSION=\"${__SCRIPT_VERSION}\"
 #### __SHORT_DESC - short description (for help texts, etc)
 ####   Change to your need
 ####
-typeset -r __SHORT_DESC="copy a script to a list of hosts via scp and execute it on the hosts using ssh"
+typeset -r __SHORT_DESC="execute multiple excecutables either parallel or sequentiell"
 
 #### __LONG_USAGE_HELP - Additional help if the script is called with
 ####   the parameter "-v -h"
@@ -1449,177 +1156,90 @@ typeset -r __SHORT_DESC="copy a script to a list of hosts via scp and execute it
 ####         an escape character, eg. ${OS_VERSION}
 ####
 __LONG_USAGE_HELP='
-      -i hostlist[:fieldseparator]
-              \"hostlist\" is the file with the list of hosts to process.
-              Format: one hostname per line (use user@host to use an explicit
-              user for a host; this user is then used for scp and ssh to this host);
-              empty lines and lines beginning with a hash \"#\" are ignored.
-              The script only reads the first field of each line. The field
-              separator is \"${FIELD_SEPARATOR}\". To change the field separator
-              add \"[:fieldseparator]\" to the filename.
-              The char \",\" can not be used as field separator; use
-                -D fieldsep=\",\"
-              to change the default field separator instead.
-              Use a comma \",\" to separate multiple hostlists or use the
-              parameter \"-i\" more than one time.
-              All hostlists are merged and sorted. Each host in the list(s)
-              is only processed one time.
-              Missing hostlist files are treated as error. To ignore a
-              missing hostlist file add a leading \"?\" to the filename.
-              Current Value: \"${HOSTFILE}\"
-              Long format: --hostlist
+      -I [listfile|directory|regex]
+              The value for the parameter -I is either a file with a list
+              of executables to execute, a directory, or a regular expression for files.
 
-      -x hostname
-      -x hostexcludelist[:fieldseparator]
-              exclude the host \"hostname\" from the execution
-              This parameter can be used multiple times; regular expressions
-              for \"hostname\" are allowed.
-              Use \"-x none\" to clear the list of hosts to exclude.
-              Use a relative or absolute filename for \"hostname\" to read the
-              hosts to exclude from a file. Format of the file:
-              one hostname per line; empty lines and lines beginning with \"#\"
-              are ignored.
-              The script only reads the first field of each line. The field
-              separator is \"${FIELD_SEPARATOR}\". To change the field separator
-              add \"[:fieldseparator]\" to the filename.
-              The char \",\" can not be used as field separator; use
-                -D fieldsep=\",\"
-              to change the default field separator instead.
-              Missing hostexcludelist files are treated as error. To ignore a
-              missing hostexcludelist file add a leading \"?\" to the filename.
-              Current Value: \"${EXCLUDE_HOSTS}\"
-              Long format: --excludehost
+              If the value is a directory all executable files in in the
+              directory will be executed.
 
-      -A hostname
-              add the host \"hostname\" to the list of hosts
-              This parameter can be used multiple times; regular expressions
-              for \"hostname\" are not allowed.
-              Use \"-A none\" to clear the list of hosts to include.
-              Current Value: \"${INCLUDE_HOSTS}\"
-              Long format: --includehost
+              If the value is a regular expression all executables that
+              match this regular expression will be executed.
 
-      -s scriptfile
-              scriptfile is the script or executable to execute on all hosts.
-              It will be copied to each host using the user \"scpuser\" and
-              executed on each host with the user \"sshuser\".
-              If \"scriptfile\" is a binary it will be executed directly;
-              if \"scriptfile\" is not a binary it will be executed
-              either by the default shell for \"sshuser\" or by the
-              shell specified with the parameter \"-c\".
-              If this script is running in a cygwin session and the binary
-              dos2unix is available via the path the script will be converted
-              to Unix style using dos2unix before copying it to the hosts.
-              If \"-B\" is used, the value for this parameter is a command to
-              execute on the hosts without first copying it to the host. In
-              this case the command is executed by the user \"sshuser\"
-              without calling a shell.
-              Use \\; in this case to separate multiple commands to execute.
-              e.g: -s \"uname -a \\; uptime \"
-              Current value: \"${SCRIPTFILE}\"
-              Long format: --scriptfile
+              In both cases the script sorts the list of executables before
+              adding them to the list of executables to execute
 
-      -u sshuser
-              \"sshuser\" is the userid to use for ssh and scp on the target
-              hosts
-              To use different user for ssh and scp use:
-              -u ssh:sshuser
-              -u scp:scpuser
-              If \"-u scp:scpuser\" is not used the sshuser is also used for scp.
-              Current value for sshuser is \"${SSHUSER}\"
-              Current value for scpuser is \"${SCPUSER}\"
-              Long format: --sshuser
+              A listfile is a file with a list of executables to execute
+              The format of the file is:
+                one executable per line, empty lines and lines beginning
+                with a hash \"#\" are ignored.
+              Parameter for the executables are NOT allowed.
+
+              Use a comma \",\" to separate multiple listfiles or directories.
+              or use the parameter \"-I\" more than one time.
+
+              Missing listfiles or directories or regex that do not expand to
+              a file are not treated as error.
+              Current list of executables is: \"${SCRIPTLIST}\"
+              Long format: --list
+
+      -i executable
+              \"executable\" is an executable to execute.
+              Use a comma \",\" to separate multiple executables
+              or use the parameter \"-i\" more than one time.
+              Current list of executables is: \"${SCRIPTLIST}\"
+              Long format: --exec
+
+      -x executable
+              exclude the executable \"executable\" from the execution
+              Use a comma \",\" to separate multiple executables
+              or use the parameter \"-i\" more than one time.
+              Regular expressions for \"executable\" are allowed.
+              Use \"-x none\" to clear the list of executables to exclude.
+              Current value: \"${SCRIPTEXCLUDE_LIST}\"
+              Long format: --exclude
+
+      -s startscript
+              The executable \"startscript\" is executed before
+              all other executables. And it is always executed in the foreground
+              Current value: \"${START_SCRIPT}\"
+              Long format: --startscript
+
+      -z stopscript
+              The executable \"stopscript\" is executed after all other
+              executables finished. And it is always executed in the foreground
+              Current value: \"${STOP_SCRIPT}\"
+              Long format: --stopscript
+
+      -o working directory
+              This is the directory used for temporary files and
+              the log files of the executables.
+              Current value: ${WORKDIR}
+              Long format: --workdir
 
       -c shell_to_use
-              \"shell_to_use\" is the shell to execute the script on the hosts
-              Use \"none\" to execute the script with the default shell
-              of the \"sshuser\".
-              If \"-B\" is used or if the command to execute (parameter \"-s\")
-              is a binary this parameter is ignored and the command
-              is always executed directly.
+              \"shell_to_use\" is the shell to execute scripts
+              use \"default\" to use the shell from this script and use
+              \"none\" to use no explicit shell
               Current value \"${SHELL_TO_USE}\"
               Long format: --shell
 
-      -I basedir
-              \"basedir\" is the directory with the hostlist and the
-              script files; if this parameter is found the script searches
-              the hostlist files and the script files in this directory also
-              Current value: \"${FILE_BASEDIR}\"
-              Long format: --basedir
+       -r|+r remove duplicates from the list of executables
+              Current value \"${REMOVE_DUPLICATES}\"
+              Long format: --remove_duplicates
 
-      -o outputfile
-              \"outputfile\" is the name of the file for the output generated
-              by the commands. If \"-U\" is also used the output for each host
-              is logged into a separate file named \"<outputfile>.<hostname>\"
-              Current value \"${OUTPUTFILE}\"
-              Long format: --outputfile
-
-      -p scpoptions
-              \"scpoptions\" are additional options for scp, e.g
-                 -p \"-o StrictHostKeyChecking=no\"
-              Current value \"${SCP_OPTIONS}\"
-              Long format: --scpoptions
-
-      -P sshoptions
-              \"sshoptions\" are additional options for ssh
-              Current value \"${SSH_OPTIONS}\"
-              Long format: --sshoptions
-
-      -t ssh:ssh_template
-      -t scp:scp_template
-              Define a new template for the scp or ssh command
-              (see below for the known template placeholder)
-              The scp/ssh templates are useful if a golden host is used
-              to access the machines
-              Current value:  ssh template: ${SSH_TEMPLATE}
-                              scp template: ${SCP_TEMPLATE}
-              Long format --template
-
-      -K|+K use the option \"StrictHostKeyChecking=no\" for ssh and scp.
-              In parallel mode also add the ssh and scp options
-                \"-o NumberOfPasswordPrompts=0 -o ConnectTimeout=10\"
-              Current value: $( ConvertToYesNo ${NOSTRICTKEYS} )
-              Long format: --nostrictkeys
+      -d|+d execute the commands in parallel
+              Current value: $( ConvertToYesNo "${EXECUTE_PARALLEL}" )
+              Long format: --parallel
 
       -k|+k add comments to the output file
               Current value: $( ConvertToYesNo "${ADD_COMMENTS}" )
               Long format: --nocomments
 
-      -B|+B do not upload a script to the hosts
-              In this case the value for the parameter \"-s\" is interpreted
-              as command to execute and the value for the shell to
-              use (parameter \"-c\") is ignored.
-              Current value: $( ConvertToYesNo ${DO_NOT_COPY_FILE} )
-              Long format: --do_not_copy
-
-      -b ssh_keyfile
-              Use the ssh key file \"ssh_keyfile\" for ssh and scp.
-              Default:
-              Use the default ssh key files for the user \"sshuser\" for ssh
-              and the default key file for the user \"scpuser\" for scp
-              To use different key files for ssh and scp use:
-              -b ssh:ssh_keyfile
-              -b scp:ssh_keyfile
-              Current value for ssh_keyfile is: \"${SSH_KEYFILE}\"
-              Current value for scp_keyfile is: \"${SCP_KEYFILE}\"
-              Long format: --ssh_keyfile
-
-      -U|+U create unique log files
-              (see parameter \"-o\")
-              Current value: $( ConvertToYesNo "${UNIQUE_LOGFILES}" )
-              Long format: --uniquelogfiles
-
-      -R|+R  use RCM methods
-              The default value depends on the existence of copy_table.pl
-              in the PATH.
-              Use the environment variables RCM_USERID and RCM_PASSWORD
-              to set the RCM userid and password. If these variables are
-              not set the script will prompt the user for them.
-              Current value: $( ConvertToYesNo "${RCM_SUPPORT}" )
-              Long format: --rcm
-
-      -d|+d execute the commands in parallel in the background
-              Current value: $( ConvertToYesNo "${EXECUTE_PARALLEL}" )
-              Long format: --parallel
+      -B|+B stop after an executable returns a non-zero return code
+              (only if the executables are executed in sequentiell order)
+              Current value: $( ConvertToYesNo "${STOP_AFTER_ERROR}" )
+              Long format: --stop_after_error
 
       -W timeout[/intervall]
               \"timeout\" is the timeout for background processes and
@@ -1662,36 +1282,6 @@ __LONG_USAGE_HELP='
               This parameter is only used if the commands are executed
               in parallel (parameter \"-d\")
               Long format: --noOfbackgroundProcesses
-
-
-Placeholder in the ssh and scp templates are:
-
-Placeholder  usage                              used for scp?    used for ssh?     parameter
--------------------------------------------------------------------------------------------------
-%%           %                                  yes              yes               n/a
-%b           scp binary                         yes              no                -D scp_binary
-%b           ssh binary                         no               yes               -D ssh_binary
-
-%S           source script or command           yes              yes               -s
-%s           script/binary on the target host   yes              yes               n/a
-%c           shell to use                       no               yes               -c
-
-%u           scp user                           yes              no                -u scp:
-%u           ssh user                           no               yes               -u ssh:
-%t           ticket ID string                   yes              yes               -D ticket_id=x
-
-%h           target host (FQN)                  yes              yes               n/a
-%H           target host (short hostname)       yes              yes               n/a
-%d           DNS domain                         yes              yes               n/a
-%i           target host interface              yes              yes               n/a
-
-%o           scp options                        yes              no                -p
-%o           ssh options                        no               yes               -P
-
-%k           ssh key for ssh                    no               yes               -b ssh:
-%k           ssh key for scp                    yes              no                -b scp:
-
-Do not use the characters ^A or ^X in any of the parameter!
 '
 
 #### __SHORT_USAGE_HELP - Additional help if the script is called with the parameter "-h"
@@ -1699,25 +1289,14 @@ Do not use the characters ^A or ^X in any of the parameter!
 ####   Note: To use variables in the help text use the variable name without an escape
 ####         character, eg. ${OS_VERSION}
 ####
-__SHORT_USAGE_HELP='                    [-i hostlist{,hostlist1{,...}] [-s scriptfile] [-o outputfile] [-u sshuser|scp:scpuser|ssh:sshuser] [-I basedir]
-                    [-c shell] [-k] [-U] [-p scpoptions] [-P sshoptions] [-K] [-R] [-B|+B] [-b ssh_keyfile|scp:scp_keyfile|ssh:ssh_keyfile]
-                    [-x excludehost] [-A includehost] [-t ssh:ssh_template] [-t scp:scp_template]
-                    [-d|+d] [-W [timeout[/intervall]] [-w NoOfBackgroundProcs[/intervall[/timeout]]]]
-                    [hostlist [scriptfile [outputfile [sshuser]]]]
+__SHORT_USAGE_HELP='                           [-d|+d] [-W [timeout[/intervall]] [-w NoOfBackgroundProcs[/intervall[/timeout]]]] [-c shell] [-k|+k] [-r|+r] [-B|+B]
+                           -I [listfile|directory|regex] [-i executable] [-x executable] [-o workdir] [-s startscript] [-z stopscript]
 
-  The parameters scriptfile, outputfile, and sshuser overwrite the options; hostlist (or includehost) and scriptfile are mandatory either
-  as parameter or as option.
-
-  For optimal usage ssh login via public key should be enabled on the target hosts and
-  the ssh agent should run on this host (the agent is currently ${SSH_AGENT_STATUS}).
-
-  Use \"-D help\" to view the known debug options.
+  The parameters -I or -i are mandatory.
 
   Use the parameter \"-v -h [-v]\" to view the detailed online help; use the parameter \"-X\" to view some usage examples.
 
-  It is strongly recommended to test the script execution in dry run mode (parameter \"-D dryrun\") before doing the real work!
-
-  see also http://bnsmb.de/solaris/execute_on_all_hosts.html
+  see also http://bnsmb.de/solaris/execute_scripts.html
 '
 
 #### __MUST_BE_ROOT - run script only by root (def.: false)
@@ -1821,8 +1400,6 @@ typeset -i __RT_VERBOSE_LEVEL=${__RT_VERBOSE_LEVEL:=1}
 : ${__NO_HEADERS:=${__FALSE}}
 
 #### __FORCE - do the action anyway (def.: false)
-####   If this variable is set to ${__TRUE} the function "die" will return
-####   if called with an RC not zero (instead of aborting the script)
 ####   use the parameter -f/+f to change this variable
 ####
 __FORCE=${__FALSE}
@@ -1997,13 +1574,6 @@ __REBOOT_REQUIRED=${__FALSE}
 #### __REBOOT_PARAMETER - parameter for the reboot command (def.: none)
 ####
 __REBOOT_PARAMETER=""
-
-
-#### __DEBUG_PREFIX - prefix for debug messages
-####   default: "DEBUG: "
-####
-: ${__DEBUG_PREFIX:=DEBUG: }
-
 
 #### __INFO_PREFIX - prefix for INFO messages printed if __VERBOSE_MODE = ${__TRUE}
 ####   default: "INFO: "
@@ -2385,7 +1955,6 @@ function ReadConfigFile {
     fi
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -2424,7 +1993,6 @@ EOT
     THISRC=$?
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -2444,7 +2012,6 @@ function NoOfStackElements {
 
   [ ${__STACK_POINTER} -gt 255 ] && die 234 "The return value is greater than 255 in function \"${__FUNCTION}\""
 
-  ${__FUNCTION_EXIT}
   return ${__STACK_POINTER}
 }
 
@@ -2467,7 +2034,6 @@ function FlushStack {
 
   [ ${__STACK_POINTER} -gt 255 ] && die 234 "The return value is greater than 255 in function \"${__FUNCTION}\""
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -2491,7 +2057,6 @@ function push {
     shift
   done
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2522,7 +2087,6 @@ function pop {
     shift
   done
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2548,7 +2112,6 @@ function push_and_set {
     eval ${VARNAME}="\"$*\""
   fi
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2572,8 +2135,6 @@ function CheckYNParameter {
    "n" | "N" | "no"  | "NO"  | "false" | "FALSE" | 1 ) THISRC=${__FALSE} ;;
    * ) THISRC=255 ;;
   esac
-
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -2596,7 +2157,6 @@ function ConvertToYesNo {
    * ) echo "?" ;;
   esac
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2616,7 +2176,6 @@ function InvertSwitch {
 
   eval "[ \$$1 -eq ${__TRUE} ] && $1=${__FALSE} || $1=${__TRUE} "
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2634,8 +2193,6 @@ function CheckInputDevice {
   typeset __FUNCTION="CheckInputDevice";    ${__FUNCTION_INIT} ; ${__DEBUG_CODE}
 
   tty -s
-
-  ${__FUNCTION_EXIT}
   return $?
 }
 
@@ -2680,7 +2237,6 @@ function GetProgramDirectory {
     PRGDIR="${PRG}"
   fi
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2719,7 +2275,6 @@ function substr {
     echo "${resultstr}"
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -2761,7 +2316,6 @@ function replacestr {
     echo "${sourcestring}"
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -2788,9 +2342,8 @@ function pos {
   fi
 
   [ ${THISRC} -gt 255 ] && die 234 "The return value is greater than 255 in function \"${__FUNCTION}\""
-
-  ${__FUNCTION_EXIT}
   return ${THISRC}
+
 }
 
 #### --------------------------------------
@@ -2816,8 +2369,6 @@ function lastpos {
   fi
 
   [ ${THISRC} -gt 255 ] && die 234 "The return value is greater than 255 in function \"${__FUNCTION}\""
-
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -2832,18 +2383,12 @@ function lastpos {
 ####
 function isNumber {
   typeset __FUNCTION="isNumber";    ${__FUNCTION_INIT} ; ${__DEBUG_CODE}
-  typeset THISRC=${__FALSE}
 
 # old code:
 #  typeset TESTVAR="$(echo "$1" | sed 's/[0-9]*//g' )"
 #  [ "${TESTVAR}"x = ""x ] && return ${__TRUE} || return ${__FALSE}
 
-  ${__FUNCTION_EXIT}
-
-  [[ $1 == +([0-9]) ]] && THISRC=${__TRUE}
-
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
+  [[ $1 == +([0-9]) ]] && return ${__TRUE} || return ${__FALSE}
 }
 
 #### --------------------------------------
@@ -2863,7 +2408,6 @@ function ConvertToHex {
   HEXVAR="$1"
   echo ${HEXVAR##*#}
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2884,7 +2428,6 @@ function ConvertToOctal {
   OCTVAR="$1"
   echo ${OCTVAR##*#}
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2905,7 +2448,6 @@ function ConvertToBinary {
   BINVAR="$1"
   echo ${BINVAR##*#}
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2932,7 +2474,6 @@ function toUppercase {
     echo "${testvar}"
   fi
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2959,7 +2500,6 @@ function toLowercase {
     echo "${testvar}"
   fi
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -2991,8 +2531,6 @@ function StartStop_LogAll_to_logfile {
 
   if [ ${__ACTIVATE_TRACE} = ${__TRUE} ] ; then
     LogError "StartStop_LogAll_to_logfile can NOT be used if tracing is enabled (\"-D trace\")".
-
-    ${__FUNCTION_EXIT}
     return 4
   fi
 
@@ -3037,7 +2575,6 @@ function StartStop_LogAll_to_logfile {
     THISRC=2
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3068,7 +2605,6 @@ $@"
   __SYSCMDS="${__SYSCMDS}
 # RC=${THISRC}"
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3117,7 +2653,6 @@ $@"
   __SYSCMDS="${__SYSCMDS}
 # RC=${THISRC}"
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3159,7 +2694,6 @@ $@"
   __SYSCMDS="${__SYSCMDS}
 # RC=${THISRC}"
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 
 }
@@ -3176,12 +2710,7 @@ $@"
 function UserIsRoot {
   typeset __FUNCTION="UserIsRoot";    ${__FUNCTION_INIT} ; ${__DEBUG_CODE}
 
-  typset THISRC=${__FALSE}
-
-  [ "$( id | sed 's/uid=\([0-9]*\)(.*/\1/' )" = 0 ] && THISRC=${__TRUE}
-
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
+  [ "$( id | sed 's/uid=\([0-9]*\)(.*/\1/' )" = 0 ] && return ${__TRUE} || return ${__FALSE}
 }
 
 #### --------------------------------------
@@ -3213,7 +2742,6 @@ function UserIs {
     fi
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3252,7 +2780,6 @@ function GetUserName {
 
   [ "$1"x != ""x ] &&  __USERNAME=$( grep ":x:$1:" /etc/passwd | cut -d: -f1 )  || __USERNAME=""
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -3274,7 +2801,6 @@ function GetUID {
 
   [ "$1"x != ""x ] &&  __USER_ID=$( grep "^$1:" /etc/passwd | cut -d: -f3 ) || __USER_ID=""
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -3338,7 +2864,6 @@ function LogMsg {
 
   [ "${__DEBUG_LOGFILE}"x != ""x ] && [ -f "${__DEBUG_LOGFILE}" ] && echo "${THISMSG}" 2>/dev/null >>"${__DEBUG_LOGFILE}"
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3367,7 +2892,6 @@ function LogOnly {
 
   [ "${__DEBUG_LOGFILE}"x != ""x ] && [ -f "${__DEBUG_LOGFILE}" ] && echo "${THISMSG}" 2>/dev/null  >>"${__DEBUG_LOGFILE}"
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3390,7 +2914,6 @@ function LogIfNotVerbose {
     THISRC=$?
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3417,7 +2940,6 @@ function PrintDotToSTDOUT {
     THISRC=${__TRUE}
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3462,7 +2984,6 @@ function LogInfo {
 
   [ ${THISRC} = 1 -a "${__DEBUG_LOGFILE}"x != ""x  ] && echo "${THIS_TIMESTAMP}${__INFO_PREFIX}$*" 2>/dev/null  >>"${__DEBUG_LOGFILE}"
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3475,16 +2996,15 @@ function LogRuntimeInfo {
   typeset __FUNCTION="LogRuntimeInfo";    ${__FUNCTION_INIT} ; ${__DEBUG_CODE}
   typeset THISRC=${__FALSE}
   
-  typeset ORG_INFO_PREFIX="${__INFO_PREFIX}"
-
-  __INFO_PREFIX="${__RUNTIME_INF_PREFIX}"
+  typeset ORG__INFO_PREFIX="${__INFO_PREFIX}"
+  
+  __INFO_PREFIX="${__RUNTIME_INFO_PREFIX}"
   
   LogInfo "${__RT_VERBOSE_LEVEL}" "$*"
   THISRC=$?
 
-  __INFO_PREFIX="${ORG_INFO_PREFIX}"
-  
-  ${__FUNCTION_EXIT}
+  __INFO_PREFIX="${ORG__INFO_PREFIX}"
+	  
   return ${THISRC}
 }
 
@@ -3503,7 +3023,6 @@ function LogHeader {
     [ "${__DEBUG_LOGFILE}"x != ""x ] && [ -f "${__DEBUG_LOGFILE}" ] && echo "$*" 2>/dev/null  >>"${__DEBUG_LOGFILE}"
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3528,8 +3047,6 @@ function LogWarning {
   (( __NO_OF_WARNINGS = __NO_OF_WARNINGS +1 ))
   __LIST_OF_WARNINGS="${__LIST_OF_WARNINGS}
 ${__WARNING_PREFIX}$*"
-
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3561,33 +3078,8 @@ function LogError {
   __LIST_OF_ERRORS="${__LIST_OF_ERRORS}
 ${__ERROR_PREFIX}$*"
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
-
-#### --------------------------------------
-#### LogDebugMsg
-####
-#### print a debug message to STDERR and write it also to the logfile
-####
-#### usage: LogDebugMsg message
-####
-#### returns: ${__TRUE} - message printed
-####          ${__FALSE} - message not printed
-####
-#### Notes: Output goes to STDERR
-####
-function LogDebugMsg {
-  typeset __FUNCTION="LogDebugMsg";    ${__FUNCTION_INIT} ; ${__DEBUG_CODE}
-  typeset THISRC=${__FALSE}
-
-  LogMsg "${__DEBUG_PREFIX}$*" >&2
-  THISRC=$?
-
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
-}
-
 
 #### ---------------------------------------
 #### BackupFileIfNecessary
@@ -3596,103 +3088,35 @@ function LogDebugMsg {
 ####
 #### usage: BackupFileIfNecessary [file1} ... {filen}
 ####
-####        file is the filename of the file to backup, format:
-####
-####           filename[,no_of_backups]
-####
-####        If no_of_backups is ommitted only one backup is created; the
-####        name of the backup is
-####
-####             ${CURFILE}${BACKUP_EXTENSION}
-####
-####        The default value for ${BACKUP_EXTENSION} is ".[pid]"
-####
-####        If no_of_backups is specified for one file the functions keeps
-####        up to no_of_backup backups of the file and the name(s) of
-####        the backup files
-####
-####             ${CURFILE}.0
-####             ${CURFILE}.1
-####             ${CURFILE}.2
-####              ...
-####             ${CURFILE}.[no_of_backups - 1]
-####
 #### returns: 0 - done; else error
-####
-#### If successfull ${__BACKUP_FILE} contains the name of the backup file.
-#### If no backup was created ${__BACKUP_FILE} is empty
 ####
 function BackupFileIfNecessary {
   typeset __FUNCTION="BackupFileIfNecessary";    ${__FUNCTION_INIT} ; ${__DEBUG_CODE}
 
-  : ${BACKUP_EXTENSION:=".$$"}
+ : ${BACKUP_EXTENSION:=".$$"}
 
-  typeset FILES_TO_BACKUP="$*"
-  typeset CURFILE=""
-  typeset CUR_BKP_FILE=""
-  typeset NO_OF_BACKUPS=
-  typeset -i i=
-  typeset -i j=
-  typeset THISRC=0
+ typeset FILES_TO_BACKUP="$*"
+ typeset CURFILE=""
+ typeset CUR_BKP_FILE=""
+ typeset THISRC=0
 
-  __BACKUP_FILE=""
+ if [ ${__OVERWRITE_MODE} -eq ${__FALSE} ] ; then
+   for CURFILE in ${FILES_TO_BACKUP} ; do
+     [ ! -f "${CURFILE}" ] && continue
 
-  if [ ${__OVERWRITE_MODE} -eq ${__FALSE} ] ; then
-    for CURFILE in ${FILES_TO_BACKUP} ; do
+     CUR_BKP_FILE="${CURFILE}${BACKUP_EXTENSION}"
+     LogMsg "Creating a backup of \"${CURFILE}\" in \"${CUR_BKP_FILE}\" ..."
+     cp "${CURFILE}" "${CUR_BKP_FILE}"
+     THISRC=$?
+     if [ ${THISRC} -ne 0 ] ; then
+       LogError "Error creating the backup of the file \"${CURFILE}\""
+       break
+     fi
+   done
+ fi
 
-      NO_OF_BACKUPS="${CURFILE#*,}"
-      CURFILE="${CURFILE%,*}"
-
-      [ ! -f "${CURFILE}" ] && continue
-
-      if [ "${CURFILE}"x = "${NO_OF_BACKUPS}"x ] ; then
-        CUR_BKP_FILE="${CURFILE}${BACKUP_EXTENSION}"
-        LogMsg "Creating a backup of \"${CURFILE}\" in \"${CUR_BKP_FILE}\" ..."
-        cp "${CURFILE}" "${CUR_BKP_FILE}"
-        THISRC=$?
-        if [ ${THISRC} -ne 0 ] ; then
-          LogError "Error creating the backup of the file \"${CURFILE}\""
-          break
-        else
-          __BACKUP_FILE="${CUR_BKP_FILE}"
-        fi
-      elif ! isNumber ${NO_OF_BACKUPS}  ; then
-        LogError "Backup file ${CURFILE}: Specified backup count (${NO_OF_BACKUPS}) is not a number, creating only one backup"
-        BackupFileIfNecessary "${CURFILE}"
-      elif [ ${NO_OF_BACKUPS} = 0 ] ; then
-        return
-      else
-        i="${NO_OF_BACKUPS}"
-        CUR_BKP_FILE="${CURFILE}"
-
-        LogRuntimeInfo "Creating up to ${NO_OF_BACKUPS} backups of the file \"${CURFILE}\" ..."
-
-        (( i = i - 1 ))
-        if [ -r "${CUR_BKP_FILE}.${i}" ] ; then
-          LogRuntimeInfo "  Removing the old backup file \"${CUR_BKP_FILE}.${i}\" "
-          rm "${CUR_BKP_FILE}.${i}"
-        fi
-
-        while [ $i -ge 1 ] ; do
-          (( j = i - 1 ))
-          if [ -r "${CUR_BKP_FILE}.${j}" ] ; then
-            LogRuntimeInfo "  Renaming \"${CUR_BKP_FILE}.${j}\" to \"${CUR_BKP_FILE}.${i}\" ..."
-            mv "${CUR_BKP_FILE}.${j}" "${CUR_BKP_FILE}.${i}"
-          fi
-          (( i = i - 1 ))
-
-        done
-        LogRuntimeInfo "  Renaming \"${CUR_BKP_FILE}\" to \"${CUR_BKP_FILE}.${i}\" ..."
-        mv "${CURFILE}" "${CUR_BKP_FILE}.${i}"
-      fi
-
-    done
-  fi
-
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
+ return ${THISRC}
 }
-
 
 #### ---------------------------------------
 #### CopyDirectory
@@ -3717,7 +3141,6 @@ function CopyDirectory {
      fi
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3849,7 +3272,6 @@ function AskUser {
 
   __NOECHO=${__FALSE}
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -3879,7 +3301,6 @@ function GetKeystroke {
 
   trap 2 3
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -3908,7 +3329,6 @@ function RebootIfNecessary {
     fi
   fi
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -3935,8 +3355,6 @@ function RebootIfNecessary {
 #### and
 ####     - and ends the program or reboots the machine if requested
 ####
-#### If the variable ${__FORCE} is ${__TRUE} and the return code is NOT zero
-#### die() will only print the error message and return
 ####
 function die {
   typeset __FUNCTION="die";    ${__FUNCTION_INIT} ; ${__DEBUG_CODE}
@@ -3951,8 +3369,6 @@ function die {
   if [ "$*"x != ""x ] ; then
     [ ${THISRC} = 0 ] && LogMsg "$*" || LogError "$*"
   fi
-
-  [ ${__FORCE} = ${__TRUE} -a ${THISRC}x != 0x ] && return
 
   if [ "${__NO_CLEANUP}"x != ${__TRUE}x  ] ; then
     cleanup
@@ -4063,8 +3479,6 @@ function executeFunctionIfDefined {
     fi
 
   fi
-
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -4099,7 +3513,6 @@ function rand {
     __THISRC=${__TRUE}
   fi
 
-  ${__FUNCTION_EXIT}
   return ${__THISRC}
 }
 
@@ -4134,9 +3547,7 @@ function PrintLockFileErrorMsg {
   manually and restart the script.
 
 EOF
-
-  ${__FUNCTION_EXIT}
-  return 250 "Script is already running"
+  return 250
 }
 
 # --------------------------------------
@@ -4159,8 +3570,6 @@ function CreateLockFile {
 
   typeset LN_RC=""
 
-  typeset THISRC
-
   LogRuntimeInfo "Trying to create the lock semaphore \"${__LOCKFILE}\" ..."
   if [ ${__USE_OLD_CODE} = ${__TRUE} ] ; then
 # old code using ln
@@ -4182,14 +3591,11 @@ function CreateLockFile {
 
   if [ ${LN_RC} = 0 ] ; then
     __LOCKFILE_CREATED=${__TRUE}
-
-    THISRC=0
+    return 0
   else
-    THISRC=1
+    return 1
   fi
 
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
 }
 
 # --------------------------------------
@@ -4206,21 +3612,14 @@ function CreateLockFile {
 function RemoveLockFile {
   typeset __FUNCTION="RemoveLockFile";    ${__FUNCTION_INIT} ; ${__DEBUG_CODE}
 
-  typeset THISRC=2
+  [ ! -L "${__LOCKFILE}" -a ! -f "${__LOCKFILE}" ] && return 1
+  if [ ${__LOCKFILE_CREATED} -eq ${__TRUE} ] ; then
+    LogRuntimeInfo "Removing the lock semaphore ..."
 
-  if [ ! -L "${__LOCKFILE}" -a ! -f "${__LOCKFILE}" ] ; then
-    THISRC=1
-  else
-    if [ ${__LOCKFILE_CREATED} -eq ${__TRUE} ] ; then
-      LogRuntimeInfo "Removing the lock semaphore ..."
-
-      rm "${__LOCKFILE}" 1>/dev/null 2>/dev/null
-      [ $? -eq 0 ] && THISRC=0
-    fi
+    rm "${__LOCKFILE}" 1>/dev/null 2>/dev/null
+    [ $? -eq 0 ] && return 0
   fi
-
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
+  return 2
 }
 
 # ======================================
@@ -4243,8 +3642,6 @@ function CreateTemporaryFiles {
 
   typeset CURFILE=
 
-  typeset THISRC=0
-
   typeset i=1
 
 # for compatibilty reasons the old code can still be activated if necessary
@@ -4265,11 +3662,7 @@ function CreateTemporaryFiles {
       eval CURFILE="\$__TEMPFILE${i}"
       LogRuntimeInfo "Creating the temporary file \"${CURFILE}\"; the variable is \"\${__TEMPFILE${i}}"
 
-      echo >"${CURFILE}" ||
-      if [ $? -ne 0 ] ; then
-        THISRC=$?
-        break
-      fi
+      echo >"${CURFILE}" || return $?
     else
 # improved code from wpollock (see credits)
       set -C  # turn on noclobber shell option
@@ -4290,8 +3683,7 @@ function CreateTemporaryFiles {
   umask ${__ORIGINAL_UMASK}
   __ORIGINAL_UMASK=""
 
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
+  return 0
 }
 
 # ======================================
@@ -4427,7 +3819,6 @@ function cleanup {
 
   [ -d "${OLDPWD}" ] && cd "${OLDPWD}"
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -4462,8 +3853,6 @@ function CreateDump {
   else
     if [ "${__DUMP_ALREADY_CREATED}"x = "${__TRUE}"x ] ; then
       LogRuntimeInfo "Dump of the current script environment already created."
-
-      ${__FUNCTION_EXIT}
       return ${__TRUE}
     fi
     __DUMP_ALREADY_CREATED=${__TRUE}
@@ -4489,7 +3878,6 @@ function CreateDump {
   fi
 
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -4516,7 +3904,6 @@ function IsFunctionDefined {
 
   [ $# -eq 1 ] && typeset -f $1 >/dev/null && THISRC=${__TRUE}
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -4674,7 +4061,7 @@ function GENERAL_SIGNAL_HANDLER {
             [ "${__INCLUDE_SCRIPT_RUNNING}"x != ""x ] && LogMsg "exit occurred inside of the include script \"${__INCLUDE_SCRIPT_RUNNING}\" "
             RemoveLockFile
             if [ "${__CLEANUP_ON_ERROR}"x  = "${__TRUE}"x ] ; then
-              LogMsg "__CLEANUP_ON_ERROR set -- calling the function \"die\" anyway"
+              LogMsg "__CLEANUP_ON_ERROR set -- calling the function die anyway"
               die 236 "You should use the function \"die\" to end the program"
             else
               LogWarning "You should use the function \"die\" to end the program"
@@ -4684,6 +4071,7 @@ function GENERAL_SIGNAL_HANDLER {
           else
             [ "${__CREATE_DUMP}"x != ""x ] && CreateDump
           fi
+          kill -9 $$ 2>/dev/null
         ;;
 
       * )
@@ -4737,7 +4125,6 @@ function InitScript {
     ReadConfigFile ${CONFIG_FILE}
   fi
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -4762,26 +4149,8 @@ function SetEnvironment {
     rm "${__LOGFILE}" 2>/dev/null
     __LOGFILE=""
   else
-
     [ "${__NEW_LOGFILE}"x != ""x ] && __MAIN_LOGFILE="${__NEW_LOGFILE}"
-
-    NO_OF_BACKUPS="${__MAIN_LOGFILE#*,}"
-     __MAIN_LOGFILE="${__MAIN_LOGFILE%,*}"
-    [ "${NO_OF_BACKUPS}"x = "${__MAIN_LOGFILE}"x ] && NO_OF_BACKUPS=${MAX_NO_OF_LOGFILES}
-
     LogRuntimeInfo "Initializing the log file\"${__MAIN_LOGFILE}\" "
-
-    if [ "${NO_OF_BACKUPS}"x != ""x ] ; then
-      isNumber ${NO_OF_BACKUPS}
-      if [ $? -eq 0 ] ; then
-        LogRuntimeInfo "Creating up to ${NO_OF_BACKUPS} backups of the logfile"
-        BackupFileIfNecessary "${__MAIN_LOGFILE},${NO_OF_BACKUPS}"
-        echo 2>/dev/null >"${__MAIN_LOGFILE}"
-      else
-        LogError "The value for the number of backups of the logfile \"${NO_OF_BACKUPS}\" is NOT a number. Now appending the log messages to the logfile \"${__MAIN_LOGFILE}\"."
-      fi
-    fi
-
 
     touch "${__MAIN_LOGFILE}" 2>/dev/null
     cat "${__LOGFILE}" >>"${__MAIN_LOGFILE}" 2>/dev/null
@@ -4920,12 +4289,11 @@ cat <<EOT
   ${__SCRIPTNAME} ${__SCRIPT_VERSION} - ${__SHORT_DESC}
 
   Usage: ${__SCRIPTNAME} [-v|+v] [-q|+q] [-h] [-l logfile|+l] [-y|+y] [-n|+n]
-                    [-D debugswitch] [-a|+a] [-O|+O] [-f|+f] [-C] [-H] [-X] [-S n] [-V] [-T]
+                           [-D debugswitch] [-a|+a] [-O|+O] [-f|+f] [-C] [-H] [-X] [-S n] [-V] [-T]
 ${__SHORT_USAGE_HELP}
 
 EOT
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -4962,8 +4330,6 @@ cat <<EOT
               Long format: --help
       -l    - set the logfile
               current value: ${__NEW_LOGFILE:=${__DEF_LOGFILE}}
-              use "-l [logfile,no_of_backups]" to define the number of retained backups
-              of the logfile; the default no of backups is ${MAX_NO_OF_LOGFILES}
               Long format: --logfile
       +l    - do not write a logfile
               Long format: ++logfile
@@ -5014,7 +4380,6 @@ EOT
   [ ${__VERBOSE_LEVEL} -gt 2 ] && egrep "^##[CRT]#" "$0" | cut -c5- 1>&2
 
 
-  ${__FUNCTION_EXIT}
   return 0
 }
 
@@ -5078,7 +4443,6 @@ function SetHousekeeping {
         ;;
   esac
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -5135,7 +4499,6 @@ __RUNLEVEL
     done
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -5179,8 +4542,6 @@ function GetOtherDate {
     TZ=$TZ${TIME_DIFF} date "+${FORMAT_STRING}"
     THISRC=${__TRUE}
   fi
-
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -5248,7 +4609,6 @@ ${NEW_OUTPUT}"
     fi
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -5279,7 +4639,6 @@ function PrintLine {
     typeset THISRC=${__TRUE}
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -5348,7 +4707,6 @@ function CalculateSeconds {
     fi
   fi
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -5373,7 +4731,6 @@ function check_SSH_agent_status {
     [ -S "${SSH_AUTH_SOCK}" ] && SSH_AGENT_RUNNING=${__TRUE}
   fi
 
-  ${__FUNCTION_EXIT}
   return ${SSH_AGENT_RUNNING}
 }
 
@@ -5413,69 +4770,18 @@ function GetNumberOfRunningProcesses {
   fi
   echo ${NO_OF_RUNNING_PIDS}
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
 
-#### --------------------------------------
-#### get_curhost_interface
-####
-#### get the admin interface for a host
-####
-#### usage: get_curhost_interface hostid
-####
-#### returns:  CUR_HOST_INTERFACE contains the ip address of the admin interface
-####           or the hostid if no admin interface was found
-####
-####
-function get_curhost_interface {
-  typeset __FUNCTION="get_curhost_interface";   ${__FUNCTION_INIT} ;
-  ${__DEBUG_CODE}
-
-#    typeset __FUNCTION="get_curhost_interface";     ${__DEBUG_CODE}
-
-# init the return code
-  THISRC=${__FALSE}
-
-  typeset TEMPVAR=""
-  typeset CURHOSTID="$1"
-  CUR_HOST_INTERFACE="${CURHOSTID}"
-
-  if [ $# -eq 1 ] ; then
-    if [ ${RCM_SUPPORT} = ${__FALSE} ] ; then
-      if [ "${HOST_INTERFACE}"x != ""x ] ; then
-        CUR_HOST_INTERFACE="${CURHOSTID%%.*}${HOST_INTERFACE}.${CURHOSTID#*.}"
-        THISRC=${__TRUE}
-      fi
-    else
-      LogInfo "Retrieving the admin interface for \"${CURHOSTID}\" from the RCM ..."
-      TEMPVAR=$( ${COPY_TABLE_BINARY} ${COPY_TABLE_PARAMETER} -t RCM.HOST_IF_PURPOSE -q "HOSTID=\"${CURHOSTID}\" AND purpose=\"Admin access\" " | grep hostname | cut -f2 -d '"' )
-      if [ "${TEMPVAR}"x != ""x ] ; then
-        LogInfo "The admin interface for \"${CURHOSTID}\" is \"${TEMPVAR}\" "
-        CUR_HOST_INTERFACE=${TEMPVAR}
-        THISRC=${__TRUE}
-      else
-        LogWarning "No admin interface for \"${CURHOSTID}\" configured in the RCM"
-        if [ "${HOST_INTERFACE}"x != ""x ] ; then
-          CUR_HOST_INTERFACE="${CURHOSTID%%.*}${HOST_INTERFACE}.${CURHOSTID#*.}"
-          THISRC=${__TRUE}
-        fi
-      fi
-    fi
-  fi
-
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
-}
 
 #### --------------------------------------
 #### mycleanup
 ####
 #### Housekeeping:
 ####   write the summaries
-####   cleanup the temporary files
-####   kill still running background processes if running in parallel mode
+####   cleanup the temporary
+####   kill still running background processes
 ####
 #### usage: mycleanup
 ####
@@ -5485,1084 +4791,73 @@ function mycleanup {
   typeset __FUNCTION="mycleanup";   ${__FUNCTION_INIT} ;
   ${__DEBUG_CODE}
 
-# reset the terminal
-#
-  executeCommand  "stty sane"
+  if [ "${PROCESSING_STARTED}"x = "${__TRUE}"x ] ; then
 
-  if [ "${RESTORE_KNOWN_HOSTS}"x = "${__TRUE}"x ] ; then
-    if [ -r "${DEFAULT_KNOWN_HOSTS_FILE_BACKUP}" ] ; then
-      LogMsg "Restoring the file \"${KNOWN_HOSTS_FILE}\" from \"${KNOWN_HOSTS_FILE_BACKUP}\" ..."
-      cp "${KNOWN_HOSTS_FILE_BACKUP}"  "${KNOWN_HOSTS_FILE}" && rm "${KNOWN_HOSTS_FILE_BACKUP}" || \
-        LogError "Error restoring the knonwn_hosts file"
+    typeset STILL_RUNNING_PIDS=""
+    typeset KEEP_LOGFILES=${__FALSE}
+    typeset CLEANUP_OUTPUT=""
+    typeset CUR_PID
+
+    LogMsg ""
+
+    if [ ${NO_OF_SCRIPTS_EXECUTED} != 0 ] ; then
+      LogMsg "-"
+      LogMsg "${NO_OF_SCRIPTS_EXECUTED} executable(s) executed:"
+      LogMsg "-" "${SCRIPTS_EXECUTED}"
     else
-      LogError "Restoring the known_hosts file requested but the backup file \"${DEFAULT_KNOWN_HOSTS_FILE_BACKUP}\" does not exist"
+      LogWarning "No executables executed"
     fi
-  fi
 
-  if [ ${EXECUTE_PARALLEL} != ${__TRUE} ] ; then
-    if [ "${HOST_PROCESSING_STARTED}"x = "${__TRUE}"x ] ; then
-      LogMsg ""
-      LogMsg "All done, ${COUNT} host(s) processed:"
-      LogMsg "    ${HOSTS_PROCESSED}"
-      LogMsg ""
-
-      if [ "${HOSTS_EXCLUDED}"x != ""x ] ; then
-        LogMsg "Not processed hosts on the host exclude list are:"
-        for CUR_HOST in ${HOSTS_EXCLUDED} ; do
-          LogMsg "    ${CUR_HOST}"
-        done
-        LogMsg ""
-      fi
-
-      if [ "${HOSTS_IGNORED_ON_USER_REQUEST}"x != ""x ] ; then
-        LogMsg "Hosts not processed on user request are:"
-        for CUR_HOST in ${HOSTS_IGNORED_ON_USER_REQUEST} ; do
-          LogMsg "    ${CUR_HOST}"
-        done
-        LogMsg ""
-      fi
-
+    if [ ${NO_OF_SCRIPTS_NOT_EXECUTED} != 0 ]  ; then
+      LogMsg "-"
+      LogMsg "${NO_OF_SCRIPTS_NOT_EXECUTED} executable(s) not executed due to an error."
+      LogMsg "-" "${SCRIPTS_NOT_EXECUTED}"
     fi
-  else
 
-    if [ "${PROCESSING_STARTED}"x = "${__TRUE}"x ] ; then
+    if [ ${NO_OF_SCRIPTS_EXCLUDED} != 0 ] ; then
+      LogMsg "-"
+      LogMsg "${NO_OF_SCRIPTS_EXCLUDED} executable(s) not executed because they are on the exclude list:"
+      LogMsg "-" "${SCRIPTS_EXCLUDED}"
+    fi
 
-      typeset STILL_RUNNING_PIDS=""
-      typeset KEEP_LOGFILES=${__FALSE}
-      typeset CLEANUP_OUTPUT=""
-      typeset CUR_PID
-
-      LogMsg ""
-      if [ ${UNIQUE_LOGFILES} = ${__FALSE} ] ; then
-        LogMsg "The output of the commands is logged in the file"
-        LogMsg "    ${OUTPUTFILE}"
-      else
-        LogMsg "The output of the commands is logged in the files"
-        LogMsg "    ${OUTPUTFILE}.<hostname>"
-      fi
-      LogMsg ""
-
-      if [ "${INVALID_HOSTS_LIST}"x != ""x ] ; then
-        LogMsg "The following hosts could NOT be processed due to an error:"
-        for CURHOST in ${INVALID_HOSTS_LIST} ; do
-          LogMsg "    ${CURHOST}"
-        done
-      fi
-      LogMsg ""
+    LogMsg "-"
+    LogMsg "The working directory was \"${WORKDIR}\"."
+    LogMsg "-"
 
 # kill still running background processes
-      for CUR_PID in ${BACKGROUND_PIDS} ; do
-        CUR_OUTPUT="$( ps -fp ${CUR_PID} )"
-        if [ $? -eq 0 ] ; then
-          LogMsg "Process ${CUR_PID} is still running: "
-          LogMsg "${CUR_OUTPUT}"
-          LogMsg "Killing the process ${CUR_PID} now  ..."
-          kill ${CUR_PID}
-       fi
-      done
+    for CUR_PID in ${BACKGROUND_PIDS} ; do
+      CUR_OUTPUT="$( ps -fp ${CUR_PID} )"
+      if [ $? -eq 0 ] ; then
+        LogMsg "Process ${CUR_PID} is still running: "
+        LogMsg "${CUR_OUTPUT}"
+        LogMsg "Killing the process ${CUR_PID} now  ..."
+        kill ${CUR_PID}
+     fi
+    done
 
-      for CUR_PID in ${BACKGROUND_PIDS} ; do
-        CUR_OUTPUT="$( ps -fp ${CUR_PID} )"
-        if [ $? -eq 0 ]  ; then
-          LogMsg "Process ${CUR_PID} is still running: "
-          LogMsg "${CUR_OUTPUT}"
-          LogMsg "Killing the process ${CUR_PID} now with -9  ..."
-          kill ${CUR_PID}
-        fi
-      done
-
-      for CUR_PID in ${BACKGROUND_PIDS} ; do
-        ps -p ${CUR_PID} >/dev/null && STILL_RUNNING_PIDS="${STILL_RUNNING_PIDS} ${CUR_PID}"
-      done
-
-      if [ "${STILL_RUNNING_PIDS}"x != ""x ] ; then
-        LogError "There are still running background processes (kill -9 did not work): ${STILL_RUNNING_PIDS}"
-        ps -p ${STILL_RUNNING_PIDS}
-
-        KEEP_LOGFILES=${__TRUE}
+    for CUR_PID in ${BACKGROUND_PIDS} ; do
+      CUR_OUTPUT="$( ps -fp ${CUR_PID} )"
+      if [ $? -eq 0 ]  ; then
+        LogMsg "Process ${CUR_PID} is still running: "
+        LogMsg "${CUR_OUTPUT}"
+        LogMsg "Killing the process ${CUR_PID} now with -9  ..."
+        kill ${CUR_PID}
       fi
+    done
 
-      if [ "${TMP_OUTPUT_DIR}"x != ""x ] ; then
-        if [ -d "${TMP_OUTPUT_DIR}" ] ; then
-          if [ "${__TRAP_SIGNAL}"x != ""x -o "${KEEP_LOGFILES}" = "${__TRUE}" ] ; then
-            LogWarning "Script ended with an error -- will not remove the temporary directory \"${TMP_OUTPUT_DIR}\"!"
-          else
-            __LIST_OF_TMP_DIRS="${__LIST_OF_TMP_DIRS} ${TMP_OUTPUT_DIR}"
-          fi
-        fi
-      fi
+    for CUR_PID in ${BACKGROUND_PIDS} ; do
+      ps -p ${CUR_PID} >/dev/null && STILL_RUNNING_PIDS="${STILL_RUNNING_PIDS} ${CUR_PID}"
+    done
+
+    if [ "${STILL_RUNNING_PIDS}"x != ""x ] ; then
+      LogError "There are still running background processes (kill -9 did not work): ${STILL_RUNNING_PIDS}"
+      ps -p ${STILL_RUNNING_PIDS}
+
+      KEEP_LOGFILES=${__TRUE}
     fi
-  fi
 
-  if [ "${PREFIX}"x != ""x ] ; then
-    LogMsg "CAUTION: dry run -only -- NO scp or ssh command was executed"
   fi
 }
-
-#### --------------------------------------
-#### list_returncodes
-####
-#### list all return codes used by a script
-####
-#### usage: list_returncodes {scriptname}
-####
-#### returns:  the functions prints a list of all returncodes to STDOUT
-####           This works only if only the function die is used to end
-####           the script.
-####
-####
-function list_returncodes {
-  typeset __FUNCTION="list_returncodes";   ${__FUNCTION_INIT} ;
-  ${__DEBUG_CODE}
-
-# init the return code
-  typeset THISRC=${__FALSE}
-
-  typeset -R5 RC_P="RC"
-  typeset     RC_S="Error Message"
-
-  typeset MSG="${RC_P} ${RC_S}"
-  typeset OUTPUT=""
-  typeset DIE_PARAMETER=""
-  typeset DIE_MSG=""
-  typeset DIE_RC=""
-  typeset DIE_UNKNWON=""
-  typeset INVALID_RC_FOUND=${__FALSE}
-
-  typeset SCRIPTFILE="$1"
-  [ "${SCRIPTFILE}"x = ""x ] && SCRIPTFILE="${__SCRIPTDIR}/${__SCRIPTNAME}"
-
-  [ ! -r "${SCRIPTFILE}" ] && die 230  "${SCRIPTFILE} does not exist or is not readable"
-
-  echo "${MSG}"
-
-  grep "die " ${SCRIPTFILE} | egrep -v "^#|grep|function die|__MAINRC|DIE" | while read line ; do
-
-    DIE_PARAMETER="${line#*die }"
-
-    DIE_MSG="${DIE_PARAMETER#* }"
-    DIE_RC="${DIE_PARAMETER%% *}"
-
-    if [ "${DIE_RC}"x = ""x ] ; then
-      DIE_UNKNOWN="${DIE_UNKNOWN}
-${line}
-"
-      continue
-    fi
-
-    [ "${DIE_RC}"x = "${DIE_MSG}"x ] && DIE_MSG=""
-
-if [ 0 = 1 ] ; then
-    [ "${DIE_RC}"x =    "0"x -a "${DIE_MSG}"x = ""x ] && DIE_MSG="(no error)"
-    [ "${DIE_RC}"x =    "1"x -a "${DIE_MSG}"x = ""x ] && DIE_MSG="(show usage)"
-    [ "${DIE_RC}"x =    "2"x -a "${DIE_MSG}"x = ""x ] && DIE_MSG="One or more invalid parameters found"
-    [ "${DIE_RC}"x =  "250"x -a "${DIE_MSG}"x = ""x ] && DIE_MSG="Script is already running"
-fi
-
-    isNumber ${DIE_RC}
-    if [ $? -ne 0 ] ; then
-      DIE_UNKNOWN="${DIE_UNKNOWN}
-${line}
-"
-      continue
-    fi
-
-    if [ ${DIE_RC} -ge 210 -o ${DIE_RC} = 1 -o ${DIE_RC} = 0 -o ${DIE_RC} = 2 ] ; then
-      if [ "${DIE_MSG}"x = ""x ] ; then
-        DIE_MSG="$( grep "##R# "  "${SCRIPTFILE}" | grep " ${DIE_RC} " | tr -s " "  | cut -f4- -d " " )"
-      fi
-    fi
-
-    if [ 0 = 1 ] ; then
-      echo "$line"
-      echo "  P    = ${DIE_PARAMETER}"
-      echo "  RC  = ${DIE_RC}"
-      echo "  MSG = ${DIE_MSG}"
-    fi
-
-    RC_P="${DIE_RC}"
-    RC_S="${DIE_MSG}"
-
-    if [ ${DIE_RC} -gt 255 ] ; then
-      INVALID_RC_FOUND=${__TRUE}
-      MSG="${RC_P} ${RC_S} (*)"
-    else
-      MSG="${RC_P} ${RC_S}"
-    fi
-    OUTPUT="${OUTPUT}
-${MSG}"
-
-  done
-
-  echo "${OUTPUT}" | grep -v "^$" | sort -b -n | uniq
-
-  if [ ${INVALID_RC_FOUND} = ${__TRUE} ] ; then
-    echo "
-(*) WARNING: Returncodes greater than 255 do not work in scripts!"
-  fi
-
-  if [ "${DIE_UNKNOWN}"x != ""x ] ; then
-    echo "
-Lines with unknown usage of the function \"die\":
-
-${DIE_UNKNOWN}
-"
-  fi
-
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
-}
-
-#### --------------------------------------
-#### ProcessDebugSwitch
-####
-#### process the debug switches
-####
-#### usage: ProcessDebugSwitch debugswitch
-####
-#### returns:  ${__TRUE} - ok
-####           ${__FALSE} - error
-####
-####
-function ProcessDebugSwitch {
-  typeset __FUNCTION="ProcessDebugSwitch";   ${__FUNCTION_INIT} ;
-  ${__DEBUG_CODE}
-
-# init the return code
-  typeset THISRC=${__FALSE}
-
-  typeset CUR_DEBUG_SWITCH="$*"
-
-  typeset CUR_STATEMENT=""
-  typeset CUR_VALUE=""
-  typeset CUR_VAR=""
-
-  typeset DEBUG_PARAMETER_OKAY=${__FALSE}
-
-  LogInfo "Processing the debug switch \"${CUR_DEBUG_SWITCH}\" ..."
-
-
-  case ${CUR_DEBUG_SWITCH} in
-
-    "help" )
-       cat <<EOT
-Note:
-
-Be aware that the order of some of the -D parameter is important (see below)!
-
-Known debug switches (for -D / --debug):
-
-  help          -- show this usage and exit
-  create_documentation
-                -- create the script documentation
-  list_rc       -- list return codes used by this script
-  msg           -- log debug messages to the file ${__DEBUG_LOGFILE}
-  trace         -- activate tracing to the file ${__TRACE_LOGFILE}
-  fn_to_stderr  -- print the function names to STDERR
-  fn_to_tty     -- print the function names to /dev/tty
-  fn_to_handle9 -- print the function names to the file handle 9
-  fn_to_device=filename
-                -- print the function names to the file "filename"
-  debugcode="x" -- execute the debug code "x" at every function start
-  printargs     -- print the script arguments
-  tracefunc=f1[,...,f#]
-                -- enable tracing for the functions f1 to f#
-                   Note: Use either debugcode=x or tracefunc=f1 - but NOT both
-  debug         -- start debug env
-  setvar:name=value
-                -- set the variable "name" to "value"
-  listfunc      -- list all functions defined and exit
-  create_dump=d -- enable environment dumps; target directory is d
-  SyntaxHelp    -- print syntax usage examples for the functions in the template
-                   and exit
-  dryrun        -- dry run only, do not execute commands
-                   default prefix for dryrun is: "${ECHO} "
-  dryrun=prefix -- dry run only, add the prefix "prefix" to all commands
-
-  fieldsep=x    -- change the default field separator to x
-  ignore_user_in_file
-               -- ignore user names from the host lists
-  do_not_sort_hostlist
-               -- do not sort the list of hosts
-  ssh_binary=x
-               -- use the ssh binary x
-  scp_binary=x
-               -- use the scp binary x
-  dos2unix_binary=x
-               -- use the dos2unix binary x
-  if=x         -- use the host interface x, e.g.
-                  if=a1; hostname=myhost.mydom.net -> interface to use is myhosta1.mydom.net
-  enable_ForwardAgent_for_scp
-               -- enable "ForwardAgent yes" for scp
-  disable_ForwardAgent_for_scp
-               -- disable "ForwardAgent yes" for scp
-  singlestep   -- execute the commands in single step mode
-                  (only used in sequentiell mode)
-  print_cmd    -- write scp and ssh commands to STDOUT
-  clean_known_hosts
-               -- remove each host from the known_hosts file before doing
-                  the scp and ssh
-  restore_known_hosts
-               -- restore the known_hosts file before the script ends
-
-  rcm_server=x    -- RCM server to use
-  rcm_user=x      -- RCM user
-  rcm_password=x  -- RCM password
-
-    ---- Macros ----
-
-  enable_gh    -- enable ForwardAgent for ssh and scp,
-                  cleanup and restore the known_hosts
-
-  ticket_id=x  -- set the ticket id for the SLS access to x; use 
-                  "ticket_id=none" for no ticket id; use "ticket_id=default" 
-                  to use the default ticket number which is ${PASSTHROUGH_TICKET}.
-                  Current value is "$( [ "${NEW_TICKET_ID}"x = "none"x ] && echo "no ticket used" || echo "${TICKET_ID_STRING}" | cut -f2- -d "=" | tr -d "@" )"
-                  
-  use_ssh_wrapper
-               -- use my ssh and scp wrapper script
-                  Current value is $( ConvertToYesNo ${USE_SSH_WRAPPER} )
-
-  Hints for the sls* Parameter listed below:
- 
-  To use another ticket id with the sls* Parameter add the parameter "-D ticket_id=n" BEFORE the 
-  sls* Parameter!
-
-  sls_db_unxxx4 
-               -- use DB SLS for ssh and scp access using the user unxxx4
-                  enable ForwardAgent for ssh and scp,
-                  cleanup and restore the known_hosts,
-                  enable RCM access,
-                  and set the ssh user and scp user to unxxx4
-                  
-  sls_scp_db_unxxx4
-               -- use DB SLS for scp access using the user unxxx4,
-                  enable ForwardAgent for ssh and scp,
-                  cleanup and restore the known_hosts,
-                  enable RCM access,
-                  and set the scp user to unxxx4
-
-  sls_ssh_db_unxxx4
-               -- use DB SLS for ssh access using the user unxxx4
-                  enable ForwardAgent for ssh and scp,
-                  cleanup and restore the known_hosts,
-                  enable RCM access,
-                  and set the ssh user to unxxx4
-  
-  sls_db       -- use DB SLS for ssh and scp access,
-                  enable ForwardAgent for ssh and scp,
-                  cleanup and restore the known_hosts,
-                  enable RCM access,
-                  and set the ssh user and scp user to root
-
-  sls_scp_db   -- use DB SLS for scp access,
-                  enable ForwardAgent for ssh and scp,
-                  cleanup and restore the known_hosts,
-                  enable RCM access,
-                  and set the scp user to root
-
-  sls_ssh_db   -- use DB SLS for ssh access,
-                  enable ForwardAgent for ssh and scp,
-                  cleanup and restore the known_hosts,
-                  enable RCM access,
-                  and set the ssh user to root
-
-  sls_fms      -- use FMS SLS for ssh and scp access,
-                  enable ForwardAgent for ssh and scp,
-                  enable RCM access,
-                  set the interface to use to a1,
-                  and set the ssh and the scp user to root
-
-  sls_ssh_fms  -- use FMS SLS for ssh access,
-                  enable ForwardAgent for ssh and scp,
-                  enable RCM access,
-                  set the interface to use to a1,
-                  and set the ssh to root and the scp user to support
-EOT
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        die 0
-        ;;
-
-    list_rc )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        list_returncodes
-        die 0
-        ;;
-
-    printargs )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "The script parameter are: "
-        LogDebugMsg "${THIS_PARAMETER}"
-
-#        typeset i=0 ; typeset p=""
-#        while  [ $i -lt $# ] ; do
-#          (( i = i + 1 ))
-#          eval p="\${i}"
-#          LogDebugMsg "  The parameter $i is: <${p}>"
-#        done
-        ;;
-
-    fieldsep=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        FIELD_SEPARATOR="${CUR_DEBUG_SWITCH#*=}"
-        LogDebugMsg "Setting the default field separator to \"${FIELD_SEPARATOR}\" "
-        if [ ${#FIELD_SEPARATOR} != 1 ] ; then
-          die 2 "-D ${CUR_DEBUG_SWITCH} : The field separator must be a single character"
-        fi
-        ;;
-
-    if=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        HOST_INTERFACE="${CUR_DEBUG_SWITCH#*=}"
-        LogDebugMsg "Using the host interface ${HOST_INTERFACE} "
-        ;;
-
-# parameter for the RCM support
-#
-#
-    rcm_user=* | rcm_userid=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        RCM_USERID="${CUR_DEBUG_SWITCH#*=}"
-        LogDebugMsg "Setting the RCM userid to use to \"${RCM_USERID}\" "
-        [ "${RCM_USERID}"x != ""x ] && RCM_SUPPORT=${__TRUE}
-        ;;
-
-    rcm_password=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        RCM_PASSWORD="${CUR_DEBUG_SWITCH#*=}"
-        LogDebugMsg "Setting the RCM password "
-        [ "${RCM_PASSWORD}"x != ""x ] && RCM_SUPPORT=${__TRUE}
-        ;;
-
-    rcm_server=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        RCM_SERVER="${CUR_DEBUG_SWITCH#*=}"
-        LogDebugMsg "Setting the RCM server to use to \"${RCM_SERVER}\" "
-        [ "${RCM_SERVER}"x != ""x ] && RCM_SUPPORT=${__TRUE}
-        ;;
-
-    print_cmd )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Enabling printing the scp and ssh commands to STDOUT."
-        PRINT_CMD=${__TRUE}
-        ;;
-
-    no_print_cmd )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Disabling printing the scp and ssh commands to STDOUT."
-        PRINT_CMD=${__FALSE}
-        ;;
-
-    restore_known_hosts )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Enabling the restore of the known_hosts file"
-        RESTORE_KNOWN_HOSTS=${__TRUE}
-        ;;
-
-    no_restore_known_hosts )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Disabling the restore of the known_hosts file"
-        RESTORE_KNOWN_HOSTS=${__TRUE}
-        ;;
-
-    clean_known_hosts )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Enabling known_hosts cleanup"
-        CLEAN_KNOWN_HOSTS=${__TRUE}
-        ;;
-
-    no_clean_known_hosts )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Disabling known_hosts cleanup"
-        CLEAN_KNOWN_HOSTS=${__FALSE}
-        ;;
-
-    singlestep )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Enabling single step mode"
-        SINGLE_STEP=${__TRUE}
-        ;;
-
-    no_singlestep )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Disabling single step mode"
-        SINGLE_STEP=${__FALSE}
-        ;;
-
-
-#  macros for various customer
-#
-
-    no_sls_db )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        die 45 "Parameter \"-D nosls_db\" is NOT implemented!"
-        ;;
-
-    no_sls_fms )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        die 46 "Parameter \"-D nosls_fms\" is NOT implemented!"
-        ;;
-
-    no_enable_gh )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        die 47 "Parameter \"-D no_enable_gh\" is NOT implemented!"
-        ;;
-
-    enable_gh  )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        ProcessDebugSwitch "enable_ForwardAgent_for_scp"
-        ProcessDebugSwitch "clean_known_hosts"
-        ProcessDebugSwitch "restore_known_hosts"
-        ;;
-
-    use_ssh_wrapper )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        USE_SSH_WRAPPER=${__TRUE}
-        ;;
-
-    no_use_ssh_wrapper )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        USE_SSH_WRAPPER=${__FALSE}
-        ;;
-
-    ticket_id=* )    
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        NEW_TICKET_ID="${CUR_DEBUG_SWITCH#*=}"
-
-        if [ "${NEW_TICKET_ID}"x = "default"x  ] ; then
-          NEW_TICKET_ID=""
-          TICKET_ID_STRING=""
-        elif [ "${NEW_TICKET_ID}"x = ""x -o "${NEW_TICKET_ID}"x = "none"x ] ; then
-          TICKET_ID_STRING=""
-        else
-          TICKET_ID_STRING="${TICKET_STRING}${NEW_TICKET_ID}@"
-        fi
-        LogDebugMsg "Setting the ticket_id string to \"${TICKET_ID_STRING}\" "
-        ;;
-
-    sls_db )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Using DB SLS for root access for ssh and scp"
-
-        TEMPVAR="$( echo rz2.d2.db.c4m | tr "12345" "aeiou" )"
-        
-        if [ ${USE_SSH_WRAPPER} = ${__TRUE} ] ; then
-
-### --------------------------------------------------------------------
-### Code for using my ssh wrapper script        
-#
-          SCP_TEMPLATE="%b %k %o %S sls4root@sls.${TEMPVAR}:/%u@%H%s"
-          SCPUSER="root"
-
-# CAUTION: -t -t  is required here!!!
-          SSH_TEMPLATE="%b %k %o -t -t -A -l sls4root sls.${TEMPVAR} sls -c %u@%H '%s' "
-          SSHUSER="root"
-
-        else
-### --------------------------------------------------------------------
-### Code for using the default ssh and scp binaries
-#
-          [ "${NEW_TICKET_ID}"x = ""x ] && TICKET_ID_STRING="${TICKET_STRING}${PASSTHROUGH_TICKET}@"
-
-          SCPUSER="root"
-	   	  SCP_BINARY="/usr/bin/scp"
-          SCP_TEMPLATE="%b %k %o %S %tsls4root@sls.${TEMPVAR}:/%u@%H%s " 
-
-# CAUTION: -t -t  is required here!!!
-#
-          SSHUSER="root"
-          SSH_BINARY="/usr/bin/ssh"
-          SSH_TEMPLATE="%b %k %o -t -t -A %tsls4root@sls.${TEMPVAR} sls -c %u@%H '%s' "
-        fi
-### --------------------------------------------------------------------
-
-        ProcessDebugSwitch "enable_ForwardAgent_for_scp"
-        ProcessDebugSwitch "clean_known_hosts"
-        ProcessDebugSwitch "restore_known_hosts"
-        ProcessDebugSwitch "rcm_server=rcm.${TEMPVAR}"
-
-        RCM_SUPPORT=${__FALSE}
-
-        LogDebugMsg "Setting the scp user to \"${SCPUSER}\"; setting the ssh user to \"${SSHUSER}\" "
-        ;;
-
-    sls_scp_db )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Using DB SLS for root access for scp"
-# CAUTION: -t -t  is required here!!!
-        TEMPVAR="$( echo rz2.d2.db.c4m | tr "12345" "aeiou" )"
-
-
-        if [ ${USE_SSH_WRAPPER} = ${__TRUE} ] ; then
-
-### --------------------------------------------------------------------
-### Code for using my ssh wrapper script        
-#
-          SCP_TEMPLATE="%b %k %o %S sls4root@sls.${TEMPVAR}:/%u@%H%s"
-          SCPUSER="root"
-
-        else
-### --------------------------------------------------------------------
-### Code for using the default ssh and scp binaries
-#
-          [ "${NEW_TICKET_ID}"x = ""x ] && TICKET_ID_STRING="${TICKET_STRING}${PASSTHROUGH_TICKET}@"
-
-          SCPUSER="root"
-	   	  SCP_BINARY="/usr/bin/scp"
-          SCP_TEMPLATE="%b %k %o %S %tsls4root@sls.${TEMPVAR}:/%u@%H%s " 
-
-        fi
-### --------------------------------------------------------------------
-
-        ProcessDebugSwitch "enable_ForwardAgent_for_scp"
-        ProcessDebugSwitch "clean_known_hosts"
-        ProcessDebugSwitch "restore_known_hosts"
-        ProcessDebugSwitch "rcm_server=rcm.${TEMPVAR}"
-        SCPUSER="root"
-        RCM_SUPPORT=${__FALSE}
-
-        LogDebugMsg "Setting the scp user to \"${SCPUSER}\""
-        ;;
-
-    sls_ssh_db )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Using DB SLS for root access for ssh."
-## CAUTION: -t -t  is required here!!!
-        TEMPVAR="$( echo rz2.d2.db.c4m | tr "12345" "aeiou" )"
- 
-        if [ ${USE_SSH_WRAPPER} = ${__TRUE} ] ; then
-
-### --------------------------------------------------------------------
-### Code for using my ssh wrapper script        
-#
-
-# CAUTION: -t -t  is required here!!!
-          SSH_TEMPLATE="%b %k %o -t -t -A -l sls4root sls.${TEMPVAR} sls -c %u@%H '%s' "
-          SSHUSER="root"
-
-        else
-### --------------------------------------------------------------------
-### Code for using the default ssh and scp binaries
-#
-          [ "${NEW_TICKET_ID}"x = ""x ] && TICKET_ID_STRING="${TICKET_STRING}${PASSTHROUGH_TICKET}@"
-
-# CAUTION: -t -t  is required here!!!
-#
-          SSHUSER="root"
-          SSH_BINARY="/usr/bin/ssh"
-          SSH_TEMPLATE="%b %k %o -t -t -A %tsls4root@sls.${TEMPVAR} sls -c %u@%H '%s' "
-        fi
-  
-        ProcessDebugSwitch "enable_ForwardAgent_for_scp"
-        ProcessDebugSwitch "clean_known_hosts"
-        ProcessDebugSwitch "restore_known_hosts"
-        ProcessDebugSwitch "rcm_server=rcm.${TEMPVAR}"
-        SSHUSER="root"
-        RCM_SUPPORT=${__FALSE}
-
-        LogDebugMsg "Setting the ssh user to \"${SSHUSER}\" "
-        ;;
-
-
-    sls_db_unxxx4 )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Using DB SLS for access as unxxx4 for ssh and scp"
-        TEMPVAR="$( echo rz2.d2.db.c4m | tr "12345" "aeiou" )"
-
-        [ "${NEW_TICKET_ID}"x = ""x ] && TICKET_ID_STRING="${TICKET_STRING}${PASSTHROUGH_TICKET}@"
-
-        SCPUSER="unxxx4"
-        SCP_BINARY="/usr/bin/scp"
-        SCP_TEMPLATE="%b %k %o %S %tsls4unx4@sls.${TEMPVAR}:/%u@%H%s " 
-#
-# CAUTION: -t -t  is required here!!!
-#
-        SSH_BINARY="/usr/bin/ssh"
-        SSHUSER="unxxx4"
-        SSH_TEMPLATE="%b %k %o -t -t -A %tsls4unx4@sls.${TEMPVAR} sls -c %u@%H '%s' "
-
-        ProcessDebugSwitch "enable_ForwardAgent_for_scp"
-        ProcessDebugSwitch "clean_known_hosts"
-        ProcessDebugSwitch "restore_known_hosts"
-#        ProcessDebugSwitch "rcm_server=rcm.${TEMPVAR}"
-        RCM_SUPPORT=${__FALSE}
-
-        LogDebugMsg "Setting the scp user to \"${SCPUSER}\"; setting the ssh user to \"${SSHUSER}\" "      
-        ;;
-
-    sls_scp_db_unxxx4 )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Using DB SLS for access as unxxx4 for scp"
-
-        TEMPVAR="$( echo rz2.d2.db.c4m | tr "12345" "aeiou" )"
-
-        [ "${NEW_TICKET_ID}"x = ""x ] && TICKET_ID_STRING="${TICKET_STRING}${PASSTHROUGH_TICKET}@"
-
-        SCPUSER="unxxx4"
-	    SCP_BINARY="/usr/bin/scp"
-        SCP_TEMPLATE="%b %k %o %S %tsls4unx4@sls.${TEMPVAR}:/%u@%H%s " 
-
-        ProcessDebugSwitch "enable_ForwardAgent_for_scp"
-        ProcessDebugSwitch "clean_known_hosts"
-        ProcessDebugSwitch "restore_known_hosts"
-        ProcessDebugSwitch "rcm_server=rcm.${TEMPVAR}"
-        RCM_SUPPORT=${__FALSE}
-
-        LogDebugMsg "Setting the scp user to \"${SCPUSER}\""
-        ;;
-
-    sls_ssh_db_unxxx4 )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Using DB SLS for access as unxxx4 for ssh."
-
-# CAUTION: -t -t  is required here!!!
-#
-        [ "${NEW_TICKET_ID}"x = ""x ] && TICKET_ID_STRING="${TICKET_STRING}${PASSTHROUGH_TICKET}@"
-
-        SSHUSER="unxxx4"
-        SSH_BINARY="/usr/bin/ssh"
-        SSH_TEMPLATE="%b %k %o -t -t -A %tsls4unx4@sls.${TEMPVAR} sls -c %u@%H '%s' "
-
-        ProcessDebugSwitch "enable_ForwardAgent_for_scp"
-        ProcessDebugSwitch "clean_known_hosts"
-        ProcessDebugSwitch "restore_known_hosts"
-        ProcessDebugSwitch "rcm_server=rcm.${TEMPVAR}"
-        SSHUSER="root"
-        RCM_SUPPORT=${__FALSE}
-
-        LogDebugMsg "Setting the ssh user to \"${SSHUSER}\" "
-        ;;
-
-    sls_fms )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Using FMS SLS for root access for ssh and scp"
-#        
-## CAUTION: -t -t  is required here!!!
-#
-        TEMPVAR="$( echo f4595808x1.23r4.f45-56.27 | tr "234567890" "dcmsgeopb" )"
-        ProcessDebugSwitch "enable_ForwardAgent_for_scp"
-
-        SSH_TEMPLATE="%b %k %o -t -t -A -l sls4root ${TEMPVAR} sls -c %u@%H '%s' "
-        SCP_TEMPLATE="%b %k %o %S sls4root@${TEMPVAR}:/%u@%H%s"
-
-        TEMPVAR="$( echo r23.frankfurt.16.4ni.ib3.2o3 | tr "123456" "dcmsge" )"
-        ProcessDebugSwitch "rcm_server=${TEMPVAR}"
-
-
-        SCPUSER="root"
-        SSHUSER="root"
-
-        RCM_SUPPORT=${__FALSE}
-        LogDebugMsg "Setting the scp user to \"${SCPUSER}\"; setting the ssh user to \"${SSHUSER}\" "
-        ;;
-
-    sls_ssh_fms )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Using FMS SLS for root access for ssh"
-
-#
-## CAUTION: -t -t  is required here!!!
-#
-        TEMPVAR="$( echo f4595808x1.23r4.f45-56.27 | tr "234567890" "dcmsgeopb" )"
-        ProcessDebugSwitch "enable_ForwardAgent_for_scp"
-        ProcessDebugSwitch "if=a1"
-
-        SSH_TEMPLATE="%b %k %o -t -t -A -l sls4root ${TEMPVAR} sls -c %u@%H '%s' "
-        SSHUSER="root"
-
-#        SCP_TEMPLATE="%b %k %o %S sls4root@${TEMPVAR}:/%u@%H%s"
-        SCPUSER="support"
-
-        TEMPVAR="$( echo r23.frankfurt.16.4ni.ib3.2o3 | tr "123456" "dcmsge" )"
-        ProcessDebugSwitch "rcm_server=${TEMPVAR}"
-
-        RCM_SUPPORT=${__FALSE}
-        LogDebugMsg "Setting the ssh user to \"${SSHUSER}\" "
-        ;;
-
-    no_enable_ForwardAgent_for_scp | disable_ForwardAgent_for_scp )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Disabling agent forwarding for scp NOT implemented."
-        ;;
-
-    enable_ForwardAgent_for_scp | no_disable_ForwardAgent_for_scp )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        if [ ${SCP_WITH_FORWARD_AGENT_ENABLED} != ${__TRUE} ] ; then
-          LogDebugMsg "Enabling agent forwarding for scp."
-          SCP_WITH_FORWARD_AGENT_ENABLED=${__TRUE}
-          SCP_OPTIONS="${SCP_OPTIONS} -S ${SSH_WRAPPER_FOR_SCP} "
-        fi
-        ;;
-
-    dryrun=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        PREFIX="${CUR_DEBUG_SWITCH#*=} "
-        LogDebugMsg "Enabling dry-run mode -- the command prefix is \"${PREFIX}\" "
-        ;;
-
-    dryrun )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        PREFIX="${ECHO} "
-        LogDebugMsg "Enabling dry-run mode -- the command prefix is \"${PREFIX}\" "
-        ;;
-
-    nodryrun )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        if [ "${PREFIX}"x != ""x ] ; then
-          LogDebugMsg "Disabling dry-run mode"
-        fi
-        PREFIX=""
-        ;;
-
-    ssh_binary=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        NEW_SSH_BINARY="${CUR_DEBUG_SWITCH#*=}"
-        LogDebugMsg "The ssh binary to use is \"${NEW_SSH_BINARY}\"."
-        ;;
-
-    scp_binary=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        NEW_SCP_BINARY="${CUR_DEBUG_SWITCH#*=}"
-        LogDebugMsg "The scp binary to use is \"${NEW_SCP_BINARY}\"."
-        ;;
-
-    dos2unix_binary=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        NEW_DOS2UNIX_BINARY="${CUR_DEBUG_SWITCH#*=}"
-        LogDebugMsg "The dos2unix binary to use is \"${NEW_DOS2UNIX_BINARY}\"."
-        ;;
-
-    "ignore_user_in_file" )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Disabling user specifications from the input files"
-        IGNORE_USER_IN_FILE=${__TRUE}
-        ;;
-
-    "no_ignore_user_in_file" )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Enabling user specifications from the input files"
-        IGNORE_USER_IN_FILE=${__FALSE}
-        ;;
-
-    "do_not_sort_hostlist" )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Disabling sort of the input files"
-        DO_NOT_SORT_HOSTLIST=${__TRUE}
-        ;;
-
-    "no_do_not_sort_hostlist" | "sort_hostlist" )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Enabling sort of the input files"
-        DO_NOT_SORT_HOSTLIST=${__FALSE}
-        ;;
-
-
-    create_dump=* | create_dump )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-
-        CUR_VALUE="${CUR_DEBUG_SWITCH#*=}"
-        [ "${CUR_VALUE}"x = "${CUR_DEBUG_SWITCH}"x ] && \
-          __CREATE_DUMP=1 || \
-          __CREATE_DUMP="${CUR_VALUE}"
-        if [ "${CUR_VALUE}"x != ""x ] ; then
-          if [ -d "${CUR_VALUE}" ]  ;then
-            LogDebugMsg "Writing environment dumps to \"${CUR_VALUE}\" "
-          else
-            LogDebugMsg "Writing environment dumps to \"/tmp\" "
-          fi
-        fi
-        ;;
-
-    create_documentation )
-        CUR_VALUE="${__SCRIPTDIR}/${__SCRIPTNAME}"
-
-        CUR_VAR="${__SCRIPTNAME}.long_usage.txt"
-        LogDebugMsg "Writing the long usage documentation to ${CUR_VAR} ..."
-        ${CUR_VALUE} -v -v -h 2>/dev/null >"${CUR_VAR}"
-
-        CUR_VAR="${__SCRIPTNAME}.debug_switches.txt"
-        LogDebugMsg "Writing the debug switch documentation to ${CUR_VAR} ..."
-        ${CUR_VALUE} -D help >"${CUR_VAR}"
-
-        CUR_VAR="${__SCRIPTNAME}.txt"
-        LogDebugMsg "Writing the script documentation to ${CUR_VAR} ..."
-        ${CUR_VALUE} -H 2>"${CUR_VAR}" 1>/dev/null
-
-        CUR_VAR="${__SCRIPTNAME}.usage_examples.txt"
-        LogDebugMsg "Writing the script usage examples to ${CUR_VAR} ..."
-        ${CUR_VALUE} -X 2>"${CUR_VAR}" 1>/dev/null
-
-        CUR_VAR="${__SCRIPTNAME}.function_examples.txt"
-        LogDebugMsg "Writing the function usage examples to ${CUR_VAR} ..."
-        ${CUR_VALUE} -D SyntaxHelp 2>"${CUR_VAR}" 1>/dev/null
-
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        die 0
-        ;;
-
-
-    debugcode=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-
-        CUR_STATEMENT="${CUR_DEBUG_SWITCH#*=}"
-        LogDebugMsg "Adding the debug code \"${CUR_STATEMENT}\" to all functions."
-        __DEBUG_CODE="${CUR_STATEMENT}"
-        ;;
-
-    debug* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        CUR_STATEMENT="${CUR_DEBUG_SWITCH#*=}"
-        if [ "${CUR_STATEMENT}"x != ""x  -a "${CUR_STATEMENT}"x != "debug"x ] ; then
-          LogDebugMsg "Executing \"${CUR_STATEMENT}\" ..."
-          ${CUR_STATEMENT}
-        else
-          LogDebugMsg "Starting debug environment ..."
-          set +e
-          while true ; do
-            printf ">> "
-            read USER_INPUT
-            eval ${USER_INPUT}
-            if [ "${USER_INPUT}"x = "quiet"x -o "${USER_INPUT}"x = "q"x  ] ; then
-              break
-            elif [ "${USER_INPUT}"x = "exit"x ] ; then
-              die 10 "Script aborted by the user"
-            fi
-          done
-        fi
-        ;;
-
-    setvar:* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-
-        CUR_STATEMENT="${CUR_DEBUG_SWITCH#*:}"
-        CUR_VALUE="${CUR_STATEMENT#*=}"
-        CUR_VAR="${CUR_STATEMENT%%=*}"
-        LogDebugMsg "Setting the variable \"${CUR_VAR}\" to \"${CUR_VALUE}\" "
-        eval ${CUR_VAR}=\"${CUR_VALUE}\"
-        ;;
-
-    "SyntaxHelp" )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-
-        IsFunctionDefined SyntaxHelp
-        if [ $? -eq ${__TRUE} ] ; then
-          SyntaxHelp
-          die 0
-        else
-          die 232 "Function SyntaxHelp NOT defined."
-        fi
-        ;;
-
-    fn_to_device=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        CUR_VAR="${CUR_DEBUG_SWITCH#*=}"
-        if [ "${CUR_VAR}"x = ""x ] ; then
-          LogDebugMsg "Disabling printing all function names executed"
-          __FUNCTION_INIT=" eval __settraps"
-          __FUNCTION_EXIT=""
-        else
-          LogDebugMsg "Now Printing all function names executed to ${CUR_VAR}"
-          touch "${CUR_VAR}" || die 231 "Can not write to the file \"${CUR_VAR}\""
-
-          __FUNCTION_INIT=' eval __settraps; printf "Now in the function \"${__FUNCTION}\"; ; the parameter are \"$*\" (sec: $SECONDS): \n" >>'${CUR_VAR}
-          __FUNCTION_EXIT="eval echo \"Now leaving the function \"\${__FUNCTION}\"; THISRC is \"\${THISRC}\" (sec: \$SECONDS) \" >>${CUR_VAR} "
-        fi
-        ;;
-
-    "fn_to_stderr" )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Now Printing all function names executed to STDERR"
-
-        __FUNCTION_INIT=' eval __settraps; printf "Now in the function \"${__FUNCTION}\"; ; the parameter are \"$*\" (sec: $SECONDS): \n" >&2 '
-        __FUNCTION_EXIT="eval echo \"Now leaving the function \"\${__FUNCTION}\"; THISRC is \"\${THISRC}\" (sec: \$SECONDS) \" >&2  "
-        ;;
-
-    "fn_to_tty" )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Now Printing all function names executed to /dev/tty"
-
-        __FUNCTION_INIT=' eval __settraps; printf "Now in the function \"${__FUNCTION}\"; ; the parameter are \"$*\" (sec: $SECONDS): \n" >/dev/tty '
-        __FUNCTION_EXIT="eval echo \"Now leaving the function \"\${__FUNCTION}\"; THISRC is \"\${THISRC}\" (sec: \$SECONDS) \" >/dev/tty "
-        ;;
-
-    "fn_to_handle9" )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Now Printing all function names executed to the file handle 9"
-
-        echo 2>/dev/null >&9 || die 233 "Can not write to file handle 9"
-        __FUNCTION_INIT=' eval __settraps; printf "Now in the function \"${__FUNCTION}\"; ; the parameter are \"$*\" (sec: $SECONDS): \n" >&9 '
-        __FUNCTION_EXIT="eval echo \"Now leaving the function \"\${__FUNCTION}\"; THISRC is \"\${THISRC}\" (sec: \$SECONDS) \" >&9 "
-        ;;
-
-    "msg" )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-
-        __LOG_DEBUG_MESSAGES=${__TRUE}
-        LogDebugMsg "Debug messages enabled; the output goes into the file \"${__DEBUG_LOGFILE}\"."
-        ;;
-
-    "trace" )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-
-        __ACTIVATE_TRACE=${__TRUE}
-        exec 3>&2
-        exec 2>"${__TRACE_LOGFILE}"
-        typeset -ft $( typeset +f )
-        set -x
-        PS4='LineNo: $LINENO (sec: $SECONDS): >> '
-        LogDebugMsg "Tracing enabled; the output goes to the file \"${__TRACE_LOGFILE}\". "
-        LogDebugMsg "WARNING: All output to STDERR now goes into the file \"${__TRACE_LOGFILE}\"; use \">&3\" to print to real STDERR."
-        ;;
-
-  esac
-
-  if [ ${DEBUG_PARAMETER_OKAY} != ${__TRUE} ] ; then
-
-# replace "," with blanks now
-#
-    echo "${CUR_DEBUG_SWITCH}" | grep "," >/dev/null && \
-      CUR_DEBUG_SWITCH=$( IFS=, ; printf "%s " ${CUR_DEBUG_SWITCH}  )
-
-    case ${CUR_DEBUG_SWITCH} in
-
-      listfunc )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-        LogDebugMsg "Functions defined in the script are:"
-        typeset -f | grep "^function " | awk '{print $2 };'
-        die 0
-        ;;
-
-      tracefunc=* )
-        DEBUG_PARAMETER_OKAY=${__TRUE}
-
-        CUR_VAR="${CUR_DEBUG_SWITCH#*=}"
-
-        CUR_STATEMENT="[ 0 = 1 "
-        for CUR_VALUE in ${CUR_VAR} ; do
-          typeset -f  ${CUR_VALUE} | grep "\${__DEBUG_CODE}" >/dev/null || LogWarning  "tracefunc: function ${CUR_VALUE} is not defined or does not support debug code"
-          CUR_STATEMENT="${CUR_STATEMENT} -o \"\${__FUNCTION}\"x = \"${CUR_VALUE}\"x "
-        done
-        CUR_STATEMENT="eval ${CUR_STATEMENT} ] && printf \"\n*** Enabling trace for the function \${__FUNCTION} ...\n\" >&2 && set -x "
-
-        LogDebugMsg "Adding the debug code \"${CUR_STATEMENT}\" to all functions."
-        __DEBUG_CODE="${CUR_STATEMENT}"
-
-        ;;
-
-      * )
-#        DEBUG_PARAMETER_OKAY=${__TRUE}
-
-        die 235 "Invalid debug switch found: \"${CUR_DEBUG_SWITCH}\" -- use \"-d help\" to list the known debug switches"
-        ;;
-
-    esac
-  fi
-
-
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
-}
-
 
 #### --------------------------------------
 #### USER_SIGNAL_HANDLER
@@ -6609,7 +4904,6 @@ function USER_SIGNAL_HANDLER {
   LogMsg "Interrupted function: \"${INTERRUPTED_FUNCTION}\", Line No: \"${__LINENO}\" "
   LogMsg "***"
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
@@ -6618,7 +4912,7 @@ function USER_SIGNAL_HANDLER {
 ####
 #### check if a host is on the host exclude list
 ####
-#### usage: host_on_the_exclude_list
+#### usage: YourRoutine
 ####
 #### returns:  ${__TRUE} -  yes
 ####           ${__FALSE} - no
@@ -6638,7 +4932,7 @@ function host_on_the_exclude_list {
 # init the return code
   typeset THISRC=${__FALSE}
 
-  if [ "${CUR_HOST}"x != ""x ] ; then
+  if [ "$1"x != ""x ] ; then
     for HOST_EXCLUDE_MASK in ${EXCLUDE_HOSTS} ; do
       if [[ ${CUR_HOST} == ${HOST_EXCLUDE_MASK} ]] ; then
         HOSTS_EXCLUDED="${HOSTS_EXCLUDED} ${CUR_HOST}"
@@ -6648,125 +4942,246 @@ function host_on_the_exclude_list {
     done
   fi
 
-  ${__FUNCTION_EXIT}
-  return ${THISRC}
-}
-
-#### --------------------------------------
-#### retrieve_ssh_and_scp_user
-####
-#### get the ssh and scp user for accessing the current host
-####
-#### usage: retrieve_ssh_and_scp_user hostname
-####
-#### returns:  -
-####           CUR_HOST, CUR_SSH_USER, and CUR_SCP_USER are set
-####
-####
-retrieve_ssh_and_scp_user() {
-  typeset __FUNCTION="retrieve_ssh_and_scp_user";   ${__FUNCTION_INIT} ;
-  ${__DEBUG_CODE}
-
-# parameter
-  typeset THIS_HOST="$1"
-
-  typeset CUR_USER=""
-
-# init the return code
-  typeset THISRC=${__TRUE}
-
-  CUR_SSH_USER="${SSHUSER}"
-  CUR_SCP_USER="${SCPUSER}"
-
-# get the values from the file for this host
-#
-  CUR_USER="${THIS_HOST%@*}"
-  CUR_HOST="${THIS_HOST#*@}"
-
-  if [ "${CUR_USER}"x != "${CUR_HOST}"x ] ; then
-    if [ ${IGNORE_USER_IN_FILE} = ${__TRUE} ] ; then
-      LogMsg "++++ The user from the hostlist \"${CUR_USER}\" for the host \"${CUR_HOST}\" will be ignored."
-    else
-      CUR_SSH_USER="${CUR_USER}"
-      CUR_SCP_USER="${CUR_USER}"
-    fi
-  fi
-
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
 
 #### --------------------------------------
-#### evaluate_template
+#### CheckExecutable
 ####
-#### process the ssh or scp template for the current host
+#### check if a directory entry is an executable file
 ####
-#### usage: evaluate_template [ssh|scp]
+#### usage: CheckExecutable filename
 ####
-#### returns:  ${__TRUE} - ok
-####           ${__FALSE} - error
+#### returns:  ${__TRUE} - yes
+####           ${__FALSE} - no
 ####
-#### this functions prints the evaluated template to STDOUT
-#####
-function evaluate_template {
-  typeset __FUNCTION="evaluate_template";  
-   ${__FUNCTION_INIT} ;
+####
+function CheckExecutable {
+  typeset __FUNCTION="CheckExecutable";   ${__FUNCTION_INIT} ;
   ${__DEBUG_CODE}
 
 # init the return code
   typeset THISRC=${__FALSE}
 
-  typeset DNS_DOMAIN="${CUR_HOST#*.}"
-  typeset SHORTHOST="${CUR_HOST%%.*}"
+  if [ $# -eq 1 ] ; then
+    typeset CUR_FILE="$1"
+    [ -f "${CUR_FILE}" -a -x "${CUR_FILE}" ] && THISRC=${__TRUE}
+  fi
 
-  case $1 in
-    "ssh" )
-      echo "${SSH_TEMPLATE}" | sed \
-        -e "s${SED_SEP}%%${SED_SEP}\x01${SED_SEP}g" \
-        -e "s${SED_SEP}%b${SED_SEP}${SSH_BINARY}${SED_SEP}g" \
-        -e "s${SED_SEP}%s${SED_SEP}${TARGET_COMMAND}${SED_SEP}g" \
-        -e "s${SED_SEP}%u${SED_SEP}${CUR_SSH_USER}${SED_SEP}g" \
-        -e "s${SED_SEP}%h${SED_SEP}${CUR_HOST}${SED_SEP}g" \
-        -e "s${SED_SEP}%H${SED_SEP}${SHORTHOST}${SED_SEP}g" \
-        -e "s${SED_SEP}%d${SED_SEP}${DNS_DOMAIN}${SED_SEP}g" \
-        -e "s${SED_SEP}%i${SED_SEP}${CUR_HOST_INTERFACE}${SED_SEP}g" \
-        -e "s${SED_SEP}%o${SED_SEP}${SSH_OPTIONS}${SED_SEP}g" \
-        -e "s${SED_SEP}%k${SED_SEP}${SSH_KEY_PARM}${SED_SEP}g" \
-        -e "s${SED_SEP}%c${SED_SEP}${SHELL_TO_USE}${SED_SEP}g" \
-        -e "s${SED_SEP}%t${SED_SEP}${TICKET_ID_STRING}${SED_SEP}g" \
-        -e "s${SED_SEP}\x01${SED_SEP}%${SED_SEP}g"
-      THISRC=${__TRUE}
+  return ${THISRC}
+}
+
+#### --------------------------------------
+#### ProcessParameterI
+####
+#### Process the value of the parameter -I
+#### (either a directory or file)
+####
+#### usage: ProcessParameterI [file|directory]
+####
+#### The function prints the list of found executables to STDOUT
+####
+#### returns:  ${__TRUE} - ok
+####           ${__FALSE} - error
+####
+####
+function ProcessParameterI {
+  typeset __FUNCTION="ProcessParameterI";   ${__FUNCTION_INIT} ;
+  ${__DEBUG_CODE}
+
+# init the return code
+  typeset THISRC=${__FALSE}
+  typeset THIS_ARGS="$*"
+  typeset CUR_ARG=""
+  typeset CUR_FILE=""
+  typeset SCRIPTLIST=""
+
+  typeset -i i=0
+  typeset -i j=0
+
+  for CUR_ARG in ${THIS_ARGS} ; do
+    LogInfo "Processing \"${CUR_ARG}\" ..."
+
+    set -f
+    [[ ${CUR_ARG} == *\** ]] && i=1
+    [[ ${CUR_ARG} == *\?* ]] && j=1
+    set +f
+
+    if [ $j -ne 0 -o $i -ne 0 ] ; then
+      LogInfo "Searching for executables matching the regular expression \"${CUR_ARG}\" ..."
+
+      i=0 ; j=0
+
+      for CUR_FILE in ${CUR_ARG} ; do
+
+        substr "${CUR_FILE}" 1 1 FIRST_CHAR
+        [ "${FIRST_CHAR}"x != "/"x ] && CUR_FILE="${PWD}/${CUR_FILE}"
+
+        if [ -x "${CUR_FILE}" -a -f "${CUR_FILE}" ] ; then
+          LogInfo "  ... found the executable \"${CUR_FILE}\" ..."
+          SCRIPTLIST="${SCRIPTLIST} ${CUR_FILE}"
+          (( i = i + 1 ))
+        else
+          LogInfo "  ... ignoring the non-executable \"${CUR_FILE}\" ..."
+         (( j = j + 1 ))
+        fi
+      done
+      LogInfo "... found $i executable(s) and $j non-executable(s)."
+      [ $i = 0 ] && LogWarning "No executables found for the regular expression \"${CUR_ARG}\""
+
+      echo "${SCRIPTLIST}" | sort
+
+    elif [ -d "${CUR_ARG}" ] ; then
+      LogInfo "Searching for executables in the directory \"${CUR_ARG}\" ..."
+      cd "${CUR_ARG}"
+      if [ $? -ne 0 ] ; then
+        LogWarning "Can NOT read the directory contents of \"${CUR_ARG}\" "
+        continue
+      fi
+
+      i=0 ; j=0
+      set -f
+      for CUR_FILE in * ; do
+        if [ -x "${CUR_FILE}" -a -f "${CUR_FILE}" ] ; then
+          LogInfo "  ... found the executable \"${CUR_FILE}\" ..."
+          SCRIPTLIST="${SCRIPTLIST} ${PWD}/${CUR_FILE}"
+          (( i = i + 1 ))
+        else
+          LogInfo "  ... ignoring the non-executable \"${CUR_FILE}\" ..."
+         (( j = j + 1 ))
+        fi
+      done
+      LogInfo "... found $i executable(s) and $j non-executable(s)."
+
+      [ $i = 0 ] && LogWarning "No executables found in the directory \"${CUR_ARG}\""
+
+      echo "${SCRIPTLIST}" | sort
+
+    elif [ -f "${CUR_ARG}" ] ; then
+      LogInfo "Checking the list of executables in the file \"${OPTARG}\" ..."
+
+      i=0 ; j=0
+      for CUR_FILE in $( egrep -v "^#|^$"  "${CUR_ARG}" ) ; do
+
+        substr "${CUR_FILE}" 1 1 FIRST_CHAR
+        [ "${FIRST_CHAR}"x != "/"x ] && CUR_FILE="${PWD}/${CUR_FILE}"
+
+        if [ -x "${CUR_FILE}" -a -f "${CUR_FILE}" ] ; then
+          LogInfo "  ... found the executable \"${CUR_FILE}\" ..."
+          SCRIPTLIST="${SCRIPTLIST} ${CUR_FILE}"
+          (( i = i + 1 ))
+        else
+          LogInfo "  ...  \"${CUR_FILE}\" not found or not executable."
+          (( j = j + 1 ))
+        fi
+      done
+      LogInfo "... found $i executable(s) and $j non-executable(s)."
+
+      [ $i = 0 ] && LogWarning "No executables found from the list in the file \"${CUR_ARG}\""
+
+      echo "${SCRIPTLIST}"
+    else
+      LogWarning "File/Directory \"${OPTARG}\" NOT found."
+    fi
+  done
+
+  [ "${SCRIPTLIST}"x != ""x ] && THISRC=${__TRUE}
+
+  return ${THISRC}
+}
+
+#### --------------------------------------
+#### script_on_the_exclude_list
+####
+#### check if an executable is on the exclude list
+####
+#### usage: script_on_the_exclude_list executablename
+####
+#### returns:  ${__TRUE} - ok
+####           ${__FALSE} - error
+####
+####
+function script_on_the_exclude_list  {
+  typeset __FUNCTION="script_on_the_exclude_list ";   ${__FUNCTION_INIT} ;
+  ${__DEBUG_CODE}
+
+# init the return code
+  typeset THISRC=${__FALSE}
+
+  typeset CUR_SCRIPT="$1"
+  typeset CUR_REGEX=""
+
+  set -f
+  if [ $# -eq 1 ] ; then
+    for CUR_REGEX in ${SCRIPTEXCLUDE_LIST} ; do
+      if [[ ${CUR_SCRIPT} == ${CUR_REGEX} ]] ; then
+        LogInfo "${CUR_SCRIPT} matches the exclude regex \"${CUR_REGEX}\" "
+        THISRC=${__TRUE}
+        break
+      fi
+    done
+  fi
+
+  return ${THISRC}
+}
+
+#### --------------------------------------
+#### ViewLogfile
+####
+#### print all or parts of the logfile
+####
+#### usage: ViewLogfile logfile no_of_Lines
+####
+#### returns:  ${__TRUE} - ok
+####           ${__FALSE} - error
+####
+####
+function ViewLogfile {
+  typeset __FUNCTION="ViewLogfile";   ${__FUNCTION_INIT} ;
+  ${__DEBUG_CODE}
+
+# init the return code
+  typeset THISRC=${__FALSE}
+
+  typeset THIS_LOGFILE="$1"
+  typeset NO_OF_LINES="$2"
+
+  case ${NO_OF_LINES} in
+
+    0 ) :
       ;;
 
-    "scp" )
-      echo "${SCP_TEMPLATE}" | sed \
-        -e "s${SED_SEP}%%${SED_SEP}\x01${SED_SEP}g" \
-        -e "s${SED_SEP}%b${SED_SEP}${SCP_BINARY}${SED_SEP}g" \
-        -e "s${SED_SEP}%S${SED_SEP}${SCRIPTFILE}${SED_SEP}g" \
-        -e "s${SED_SEP}%s${SED_SEP}${TARGET_COMMAND}${SED_SEP}g" \
-        -e "s${SED_SEP}%u${SED_SEP}${CUR_SCP_USER}${SED_SEP}g" \
-        -e "s${SED_SEP}%h${SED_SEP}${CUR_HOST}${SED_SEP}g" \
-        -e "s${SED_SEP}%H${SED_SEP}${SHORTHOST}${SED_SEP}g" \
-        -e "s${SED_SEP}%d${SED_SEP}${DNS_DOMAIN}${SED_SEP}g" \
-        -e "s${SED_SEP}%i${SED_SEP}${CUR_HOST_INTERFACE}${SED_SEP}g" \
-        -e "s${SED_SEP}%o${SED_SEP}${SCP_OPTIONS}${SED_SEP}g" \
-        -e "s${SED_SEP}%k${SED_SEP}${SCP_KEY_PARM}${SED_SEP}g" \
-        -e "s${SED_SEP}%t${SED_SEP}${TICKET_ID_STRING}${SED_SEP}g" \
-        -e "s${SED_SEP}\x01${SED_SEP}%${SED_SEP}g"
+   -1 )
+      LogMsg "The contents of the logfile \"${THIS_LOGFILE}\" are:"
+      LogMsg "-"
+      LogMsg "-------------------------------------"
+      echo ${__COLOR_BG_YELLOW}
+      cat "${THIS_LOGFILE}"
+      echo ${__COLOR_NORMAL}
+      LogMsg "-------------------------------------"
+      LogMsg "-"
+
       THISRC=${__TRUE}
       ;;
 
     * )
-      LogError "${__FUNCTION} called with an invalid parameter: $1"
+      LogMsg "The last ${NO_OF_LINES} line(s) of the logfile \"${THIS_LOGFILE}\" are:"
+      LogMsg "-"
+      LogMsg "-------------------------------------"
+      echo ${__COLOR_BG_YELLOW}
+      tail -${NO_OF_LINES}  "${THIS_LOGFILE}"
+      echo ${__COLOR_NORMAL}
+
+      LogMsg "-------------------------------------"
+      LogMsg "-"
+
+      THISRC=${__TRUE}
       ;;
   esac
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
-
-
 
 #### template for a new user function
 ####
@@ -6793,16 +5208,12 @@ function YourRoutine {
 
   [ ${THISRC} -gt 255 ] && die 234 "The return value is greater than 255 in function \"${__FUNCTION}\""
 
-  ${__FUNCTION_EXIT}
   return ${THISRC}
 }
 
 # -----------------------------------------------------------------------------
 # main:
 #
-  __FUNCTION="main"
-
-  HOST_PROCESSING_STARTED=${__FALSE}
 
 # trace main routine
 #
@@ -6865,6 +5276,14 @@ fi
 #
 #  __EXITROUTINES="${__EXITROUTINES} "
 
+  SCRIPTS_EXCLUDED=""
+  SCRIPTS_NOT_EXECUTED=""
+  SCRIPTS_EXECUTED=""
+
+  typeset -i NO_OF_SCRIPTS_EXCLUDED=0
+  typeset -i NO_OF_SCRIPTS_NOT_EXECUTED=0
+  typeset -i NO_OF_SCRIPTS_EXECUTED=0
+
   BACKGROUND_PIDS=""
   __EXITROUTINES="${__EXITROUTINES} mycleanup"
 
@@ -6888,24 +5307,24 @@ fi
   CUR_SWITCH=""
   OPTARG=""
 
-  set -o noglob
+  set -f
 
 #
   [ "${__OS}"x = "Linux" ] &&  GETOPT_COMPATIBLE="0"
 
 
-  __GETOPTS="+:ynvqhHD:fl:aOS:CVTXi:o:s:u:c:kUI:p:P:KRb:BdW:w:x:A:t:"
+   __GETOPTS=":+:ynvqhHD:fl:aOS:CVTXI:i:x:o:dW:w:lc:s:z:rBk"
   if [ "${__OS}"x = "SunOS"x -a "${__SHELL}"x = "ksh"x ] ; then
     if [ "${__OS_VERSION}"x  = "5.10"x -o  "${__OS_VERSION}"x  = "5.11"x ] ; then
       __GETOPTS="+:y(yes)n(no)v(verbose)q(quiet)h(help)H(doc)D:(debug)f(force)l:(logfile)\
 a(color)O(overwrite)S:(summaries)C(writeconfigfile)V(version)T(tee)X(view_examples)\
-i:(hostlist)o:(outputfile)s:(scriptfile)u:(sshuser)c:(shell)k(nocomments)U(uniquelogfiles)\
-I:(basedir)p:(scpoptions)P:(sshoptions)K(nostrictkeys)R(rcm)b:(ssh_keyfile)B(do_not_copy)\
-d(parallel)W:(timeout)w:(noOfbackgroundProcesses)x:(excludehost)A:(includehost)t:(template)"
+I:(list)i:(exec)x:(exlcude)o:(workdir)k(nocomments)c:(shell)s:(startscript)z:(stopscript)r(remove_duplicates)\
+d(parallel)W:(timeout)w:(noOfbackgroundProcesses)x:(excludehost)A:(includehost)B(stop_after_error)"
     fi
   fi
 
-  while getopts ${__GETOPTS} CUR_SWITCH  ; do
+
+ while getopts ${__GETOPTS} CUR_SWITCH  ; do
 
 # for debugging only
 #
@@ -6935,8 +5354,9 @@ d(parallel)W:(timeout)w:(noOfbackgroundProcesses)x:(excludehost)A:(includehost)t
 
        "C" ) __WRITE_CONFIG_AND_EXIT=${__TRUE} ;;
 
-       "D" ) ProcessDebugSwitch "${OPTARG}"
-             ;;
+       "D" ) __DEBUG_SWITCHES="${__DEBUG_SWITCHES} ${OPTARG}" ;;
+
+      "+D" ) [ "${OPTARG}"x != "none"x ] && DEBUG_SWITCHES="${OPTARG}" || DEBUG_SWITCHES="" ;;
 
       "+v" ) __VERBOSE_MODE=${__FALSE}  ;;
 
@@ -6982,8 +5402,7 @@ echo " Documentation" >&2
 echo " -----------------------------------------------------------------------------------------------------" >&2
 
              grep "^##" "$0" | grep -v "##EXAMPLE##" | cut -c5- 1>&2
-             die 0
-             ;;
+             die 0 ;;
 
        "X" )
 
@@ -6995,8 +5414,7 @@ echo " -------------------------------------------------------------------------
              T=$( grep "^##EXAMPLE##" "$0" | cut -c12- )
        eval T1="\"$T\""
        echo "$T1" 1>&2
-             die 0
-             ;;
+             die 0 ;;
 
        "V" ) LogMsg "Script version: ${__SCRIPT_VERSION}"
              if [ ${__VERBOSE_MODE} = ${__TRUE} ] ; then
@@ -7006,9 +5424,7 @@ echo " -------------------------------------------------------------------------
                  LogMsg "Script config file version : ${__CONFIG_FILE_VERSION}"
                fi
              fi
-             die 0
-             ;;
-
+             die 0 ;;
 
       "+y" ) __USER_RESPONSE_IS="" ;;
 
@@ -7030,199 +5446,94 @@ echo " -------------------------------------------------------------------------
                 ;;
 
 
-        "K" ) NOSTRICTKEYS=${__TRUE}  ;;
 
-       "+K" ) NOSTRICTKEYS=${__FALSE}  ;;
+       "I" ) set -f
+             if [ "${OPTARG}"x = "none"x ] ; then
+               SCRIPTLIST=""
+             else
+               SCRIPTLIST="${SCRIPTLIST} $( ProcessParameterI $( echo "${OPTARG}" | tr "," " " ) )"
+             fi
+             ;;
 
-        "R" ) RCM_SUPPORT=${__TRUE}  ;;
-
-       "+R" ) RCM_SUPPORT=${__FALSE}  ;;
-
-        "i" | "+i")
-              if [ "${CUR_SWITCH}"x = "+i"x ] ; then
-                HOSTFILE=""
-                LogInfo "Paraemeter \"+i\" found hostlist set to an empty string again"
-              fi
-              for CUR_HOSTFILE in $( echo ${OPTARG} | tr "," " " ) ; do
-                CUR_FIELD_SEPARATOR="${CUR_HOSTFILE#*:}"
-                CUR_FILE_NAME="${CUR_HOSTFILE%%:*}"
-                [ "${CUR_FILE_NAME}"x = "${CUR_FIELD_SEPARATOR}"x ] && CUR_FIELD_SEPARATOR="${FIELD_SEPARATOR}"
-
-                if [ ${#CUR_FIELD_SEPARATOR} != 1 ] ; then
-                  LogError "The field separator for the parameter \"-i (${CUR_FILE_NAME}:${CUR_FIELD_SEPARATOR})\" must be a single character"
-                  INVALID_PARAMETER_FOUND=${__TRUE}
-                fi
-                HOSTFILE="${HOSTFILE},${CUR_HOSTFILE}"
-              done
-              LogInfo "Parameter \"-i ${OPTARG}\" processed, HOSTFILE is now \"${HOSTFILE}\" "
+      "+I" ) SCRIPTLIST="$( ProcessParameterI $( echo "${OPTARG}" | tr "," " " ) )"
               ;;
 
-        "s" ) [ "${SCRIPTFILE}"x != ""x ] && LogWarning "Parameter -s found more than once -- using only the last one"
-              SCRIPTFILE="${OPTARG}" ;;
+       "i" ) for CUR_FILE in  $( echo "${OPTARG}" | tr "," " " ) ; do
 
-        "o" ) OUTPUTFILE="${OPTARG}"
-              [ "${OUTPUTFILE}"x = "none"x ] && OUTPUTFILE=""
-              ;;
+                substr "${CUR_FILE}" 1 1 FIRST_CHAR
+                [ "${FIRST_CHAR}"x != "/"x ] && CUR_FILE="${PWD}/${CUR_FILE}"
 
-        "u" ) ARG_KEY="${OPTARG%:*}" ; ARG_VALUE="${OPTARG#*:}"
-              if [ "${ARG_KEY}"x = "${ARG_VALUE}"x ] ; then
-                SSHUSER="${ARG_VALUE}"
-              elif [ "${ARG_KEY}"x = "ssh"x ] ; then
-                SSHUSER="${ARG_VALUE}"
-              elif [ "${ARG_KEY}"x = "scp"x ] ; then
-                SCPUSER="${ARG_VALUE}"
-              else
-                LogError "Invalid value for the parameter \"-u\" found: \"${OPTARG}\" (\"${ARG_KEY}\" is invalid)"
-                INVALID_PARAMETER_FOUND=${__TRUE}
-              fi
-              ;;
-
-        "c" ) case ${OPTARG} in
-               "default" | "DEFAULT" )
-                  SHELL_TO_USE="${DEFAULT_SHELL_TO_USE}"
-                  ;;
-               "none" | "NONE" )
-                  SHELL_TO_USE=""
-                  ;;
-                *)
-                  SHELL_TO_USE="${OPTARG}"
-                  ;;
-              esac
-              ;;
-
-        "k" ) ADD_COMMENTS=${__FALSE} ;;
-
-       "+k" ) ADD_COMMENTS=${__TRUE} ;;
-
-        "U" ) UNIQUE_LOGFILES=${__TRUE} ;;
-
-       "+U" ) UNIQUE_LOGFILES=${__FALSE} ;;
-
-        "B" ) DO_NOT_COPY_FILE=${__TRUE}
-              SHELL_TO_USE=""
-              ;;
-
-       "+B" ) DO_NOT_COPY_FILE=${__FALSE} ;;
-
-        "t" ) ARG_KEY="${OPTARG%%:*}" ; ARG_VALUE="${OPTARG#*:}"
-              if [ "${ARG_KEY}"x = "${ARG_VALUE}"x ] ; then
-                LogError "Invalid usage for the parameter \"-T\" found: \"${OPTARG}\" "
-                INVALID_PARAMETER_FOUND=${__TRUE}
-              elif [ "${ARG_KEY}"x = "ssh"x ] ; then
-                if [ "${ARG_VALUE}"x = "default"x -o "${ARG_VALUE}"x = "none"x ] ; then
-                  SSH_TEMPLATE="${DEFAULT_SSH_TEMPLATE}"
+                CheckExecutable "${CUR_FILE}"
+                if [ $? -eq 0 ] ; then
+                  SCRIPTLIST="${SCRIPTLIST} ${CUR_FILE}"
                 else
-                  SSH_TEMPLATE="${ARG_VALUE}"
+                  LogWarning "Executable \"${CUR_FILE}\" does not exist or is not executable."
                 fi
-              elif [ "${ARG_KEY}"x = "scp"x ] ; then
-                if [ "${ARG_VALUE}"x = "default"x -o "${ARG_VALUE}"x = "none"x ] ; then
-                  SCP_TEMPLATE="${DEFAULT_SCP_TEMPLATE}"
-                else
-                  SCP_TEMPLATE="${ARG_VALUE}"
-                fi
-              else
-                LogError "Invalid value for the parameter \"-t\" found: \"${OPTARG}\" (\"${ARG_KEY}\" is invalid)"
-                INVALID_PARAMETER_FOUND=${__TRUE}
-              fi
-              ;;
+             done
+             ;;
 
-        "b" ) ARG_KEY="${OPTARG%%:*}" ; ARG_VALUE="${OPTARG#*:}"
-              if [ "${ARG_KEY}"x = "${ARG_VALUE}"x ] ; then
-                if [ "${ARG_VALUE}"x = "default"x -o "${ARG_VALUE}"x = "none"x ] ; then
-                  SSH_KEYFILE=""
-                  SCP_KEYFILE=""
-                else
-                  SSH_KEYFILE="${ARG_VALUE}"
-                  SCP_KEYFILE="${ARG_VALUE}"
-                fi
-              elif [ "${ARG_KEY}"x = "ssh"x ] ; then
-                if [ "${ARG_VALUE}"x = "default"x -o "${ARG_VALUE}"x = "none"x ] ; then
-                  SSH_KEYFILE=""
-                else
-                  SSH_KEYFILE="${ARG_VALUE}"
-                fi
-              elif [ "${ARG_KEY}"x = "scp"x ] ; then
-                if [ "${ARG_VALUE}"x = "default"x -o "${ARG_VALUE}"x = "none"x ] ; then
-                  SCP_KEYFILE=""
-                else
-                  SCP_KEYFILE="${ARG_VALUE}"
-                fi
-              else
-                LogError "Invalid value for the parameter \"-b\" found: \"${OPTARG}\" (\"${ARG_KEY}\" is invalid)"
-                INVALID_PARAMETER_FOUND=${__TRUE}
-              fi
-              ;;
+       "x" ) set -f 
+             SCRIPTEXCLUDE_LIST="${SCRIPTEXCLUDE_LIST} $( echo "${OPTARG}" | tr "," " " )"
+             set +f
+             ;;
 
-        "I" ) FILE_BASEDIR="${OPTARG}" ;;
+       "o" ) WORKDIR="${OPTARG}"
+             ;;
 
-        "p" ) SCP_OPTIONS="${SCP_OPTIONS}  ${OPTARG}" ;;
+       "s" ) if [ "${OPTARG}"x = "none"x ] ; then
+               START_SCRIPT=""
+             else
+               START_SCRIPT="${OPTARG}"
+             fi
+             ;;
 
-        "P" ) SSH_OPTIONS="${SSH_OPTIONS}  ${OPTARG}" ;;
+       "z" ) if [ "${OPTARG}"x = "none"x ] ; then
+               STOP_SCRIPT=""
+             else
+               STOP_SCRIPT="${OPTARG}"
+             fi
+             ;;
 
-       "+p" ) SCP_OPTIONS="${OPTARG}" ;;
+       "d" ) EXECUTE_PARALLEL=${__TRUE} ;;
 
-       "+P" ) SSH_OPTIONS="${OPTARG}" ;;
+      "+d" ) EXECUTE_PARALLEL=${__FALSE} ;;
 
-        "d" ) EXECUTE_PARALLEL=${__TRUE} ;;
+       "r" ) REMOVE_DUPLICATES=${__TRUE} ;;
 
-       "+d" ) EXECUTE_PARALLEL=${__FALSE} ;;
+      "+r" ) REMOVE_DUPLICATES=${__FALSE} ;;
 
-        "W" ) TIMEOUT_PARAMETER="${OPTARG}" ;;
+       "B" ) STOP_AFTER_ERROR=${__TRUE} ;;
 
-        "w" ) START_TIMEOUT_PARAMETER="${OPTARG}" ;;
+      "+B" ) STOP_AFTER_ERROR=${__FALSE} ;;
 
+       "c" ) case ${OPTARG} in
+              "default" | "DEFAULT" )
+                 SHELL_TO_USE="${DEFAULT_SHELL_TO_USE}"
+                 ;;
+               "none " )
+                 SHELL_TO_USE=""
+                 ;;
+               *)
+                 SHELL_TO_USE="${OPTARG}"
+                 ;;
+             esac
+             ;;
 
-        "A" ) if [ "${OPTARG}"x = "none"x ] ; then
-                INLCUDE_HOSTS=""
-                continue
-              fi
+       "k" ) ADD_COMMENTS=${__FALSE} ;;
 
-              INCLUDE_HOSTS="${INCLUDE_HOSTS},${OPTARG}"
-              ;;
+      "+k" ) ADD_COMMENTS=${__TRUE} ;;
 
-        "x" ) if [ "${OPTARG}"x = "none"x ] ; then
-                EXCLUDE_HOSTS=""
-                continue
-              fi
+       "W" ) TIMEOUT_PARAMETER="${OPTARG}" ;;
 
-              pos "/" "${OPTARG}"
-              if [ $? -ne 0 ] ; then
-                CUR_FIELD_SEPARATOR="${OPTARG#*:}"
-                CUR_FILE_NAME="${OPTARG%%:*}"
-                [ "${CUR_FILE_NAME}"x = "${CUR_FIELD_SEPARATOR}"x ] && CUR_FIELD_SEPARATOR="${FIELD_SEPARATOR}"
+       "w" ) START_TIMEOUT_PARAMETER="${OPTARG}" ;;
 
-                if [ ${#CUR_FIELD_SEPARATOR} != 1 ] ; then
-                  LogError "The field separator for the parameter \"-x ${OPTARG}\" (${CUR_FIELD_SEPARATOR}) must be one character only"
-                  INVALID_PARAMETER_FOUND=${__TRUE}
-                fi
-
-                IGONRE_MISSING_FILE=${__FALSE}
-                if [ "${CUR_FILE_NAME#*\?}"x != "${CUR_FILE_NAME}"x ] ; then
-                  CUR_FILE_NAME="${CUR_FILE_NAME#*?}"
-                  IGONRE_MISSING_FILE=${__TRUE}
-                fi
-
-                if [ ! -r "${CUR_FILE_NAME}" ] ; then
-                  if [ ${IGONRE_MISSING_FILE} = ${__TRUE} ] ; then
-                    LogWarning "Host exclude file \"${CUR_FILE_NAME}\" not found or not readable -- the file will be ignored."
-                  else
-                    LogError "Can NOT read the host exclude file \"${CUR_FILE_NAME}\" (Parameter \"-x ${OPTARG}\")"
-                    INVALID_PARAMETER_FOUND=${__TRUE}
-                  fi
-                else
-                  EXCLUDE_HOSTS="${EXCLUDE_HOSTS}, $( egrep -v "^$|^#" "${CUR_FILE_NAME}" | cut -f1 -d "${CUR_FIELD_SEPARATOR}"  )"
-                fi
-              else
-                EXCLUDE_HOSTS="${EXCLUDE_HOSTS},${OPTARG}"
-              fi
-              ;;
-
-        \? ) LogError "Unknown parameter found: \"${OPTARG}\" "
+        \? ) [ "${OPTARG}"x = ""x ] && eval OPTARG=\$"$(( $OPTIND -1 ))"
+             LogError "Unknown parameter found: \"${OPTARG}\" "
              INVALID_PARAMETER_FOUND=${__TRUE}
              break
           ;;
 
-         * ) LogError "Unknown parameter found: \"${CUR_SWITCH}\""
+         * ) LogError "Not expected parameter found: \"${CUR_SWITCH}\""
              INVALID_PARAMETER_FOUND=${__TRUE}
              break ;;
 
@@ -7261,7 +5572,7 @@ echo " -------------------------------------------------------------------------
       ShowShortUsage
       LogMsg "Use \"-v -h\", \"-v -v -h\", \"-v -v -v -h\" or \"+h\" for a long help text"
     fi
-    die 1
+    die 1 ;
   fi
 
 
@@ -7271,35 +5582,99 @@ echo " -------------------------------------------------------------------------
 
   LogRuntimeInfo "Not processed parameter: \"${NOT_PROCESSED_PARAMETER}\""
 
-  if [ "${NOT_PROCESSED_PARAMETER}"x != ""x ] ; then
-    if [ $# -ne 0 ] ; then
-      CUR_FIELD_SEPARATOR="${1#*:}"
-      CUR_FILE_NAME="${1%%:*}"
-      [ "${CUR_FILE_NAME}"x = "${CUR_FIELD_SEPARATOR}"x ] && CUR_FIELD_SEPARATOR="${FIELD_SEPARATOR}"
-      if [ ${#CUR_FIELD_SEPARATOR} != 1 ] ; then
-        LogError "The field separator for the parameter \"hostfile\" (${CUR_FILE_NAME}:${CUR_FIELD_SEPARATOR}) must be one character only"
-        INVALID_PARAMETER_FOUND=${__TRUE}
-      fi
-      HOSTFILE="$1"
-      shift
-    fi
 
-    if [ $# -ne 0 ] ; then
-      SCRIPTFILE="$1"
-      shift
-    fi
+# -----------------------------------------------------------------------------
+# process the debug switches
 
-    if [ $# -ne 0 ] ; then
-      OUTPUTFILE="$1"
-      shift
-    fi
 
-    if [ $# -ne 0 ] ; then
-      SSHUSER="$1"
-      shift
-    fi
+  if [ "${__DEBUG_SWITCHES}"x != ""x ] ; then
+     __DEBUG_SWITCHES=$( IFS=, ; printf "%s " ${__DEBUG_SWITCHES}  )
 
-    NOT_PROCESSED_PARAMETER=""
+    for __CUR_DEBUG_SWITCH in ${__DEBUG_SWITCHES} ; do
+      case ${__CUR_DEBUG_SWITCH} in
+
+        "help" )
+           cat <<EOT
+Known debug switches (for -d / --debugmode):
+
+  help         -- show this usage and exit
+  msg          -- log debug messages to the file ${__DEBUG_LOGFILE}
+  trace        -- activate tracing to the file ${__TRACE_LOGFILE}
+  fn_to_stderr -- print the function names to STDERR
+  fn_to_tty    -- print the function names to /dev/tty
+  no_of_error_loglines=n
+               -- no. of lines of the logfile to print in case of an rc not equal zero (for sequentiell tasks only)
+                  (use 0 for none or -1 for all)
+  no_of_ok_loglines=n
+               -- no of lines of the logfile to print in case of an rc equal zero (for sequentiell tasks only)
+                  (use 0 for none or -1 for all)
+  no_of_logfile_lines=n
+               -- no of lines of the logfile to print for parallel tasks
+                  (use 0 for none or -1 for all)
+EOT
+            die 0
+            ;;
+
+     no_of_error_loglines=* )
+           NO_OF_ERROR_LOGLINES="${__CUR_DEBUG_SWITCH#*=}"
+           ;;
+
+     no_of_ok_loglines=* )
+           NO_OF_OK_LOGLINES="${__CUR_DEBUG_SWITCH#*=}"
+           ;;
+
+      no_of_logfile_lines=* )
+           NO_OF_LOGFILE_LINES="${__CUR_DEBUG_SWITCH#*=}"
+           ;;
+
+     "fn_to_stderr" )
+            __FUNCTION_INIT=' eval __settraps; echo  "Now in function ${__FUNCTION} ; the parameter are \"$*\" (sec: $SECONDS): " >&2 '
+            ;;
+
+     "fn_to_tty" )
+            __FUNCTION_INIT=' eval __settraps; echo  "Now in function ${__FUNCTION} ; the parameter are \"$*\" " >/dev/tty '
+            ;;
+
+        "msg" )
+            LogMsg "Debug messages enabled; the output goes into the file \"${__DEBUG_LOGFILE}\"."
+            __LOG_DEBUG_MESSAGES=${__TRUE}
+            ;;
+
+        "trace" )
+            __ACTIVATE_TRACE=${__TRUE}
+            exec 3>&2
+            exec 2>"${__TRACE_LOGFILE}"
+            typeset -ft $( typeset +f )
+            set -x
+            PS4='LineNo: $LINENO (sec: $SECONDS): >> '
+            LogMsg "Tracing enabled; the output goes to the file \"${__TRACE_LOGFILE}\". "
+            LogMsg "WARNING: All output to STDERR now goes into the file \"${__TRACE_LOGFILE}\"; use \">&3\" to print to real STDERR."
+            ;;
+
+        * )
+            die 235 "Invalid debug switch found: \"${__CUR_DEBUG_SWITCH}\" -- use \"-d help\" to list the known debug switches"
+            ;;
+      esac
+    done
+
+  fi
+
+  isNumber ${NO_OF_ERROR_LOGLINES}
+  if [ $? -ne ${__TRUE} -a ${NO_OF_ERROR_LOGLINES} -ne -1 ] ; then
+     LogError "The value for the parameter \"-D no_of_error_loglines\" \"${NO_OF_ERROR_LOGLINES}\" is not valid"
+     INVALID_PARAMTER_FOUND=${__TRUE}
+  fi
+
+  isNumber ${NO_OF_OK_LOGLINES}
+  if [ $? -ne ${__TRUE} -a ${NO_OF_OK_LOGLINES} -ne -1 ] ; then
+     LogError "The value for the parameter \"-D no_of_ok_loglines\" \"${NO_OF_OK_LOGLINES}\" is not valid"
+     INVALID_PARAMTER_FOUND=${__TRUE}
+  fi
+
+  isNumber ${NO_OF_LOGFILE_LINES}
+  if [ $? -ne ${__TRUE} -a ${NO_OF_LOGFILE_LINES} -ne -1 ] ; then
+     LogError "The value for the parameter \"-D no_of_ok_logfile_lines\" \"${NO_OF_LOGFILE_LINES}\" is not valid"
+     INVALID_PARAMTER_FOUND=${__TRUE}
   fi
 
   if [ ${__LOG_DEBUG_MESSAGES} != ${__TRUE} ] ; then
@@ -7315,7 +5690,7 @@ echo " -------------------------------------------------------------------------
 # should abort due to an invalid parameter
 #
   if [ "${NOT_PROCESSED_PARAMETER}"x != ""x ] ; then
-    LogError "Unknown parameter found: \"${NOT_PROCESSED_PARAMETER}\" "
+    LogError "Unknown parameter: \"${NOT_PROCESSED_PARAMETER}\" "
     INVALID_PARAMETER_FOUND=${__TRUE}
   fi
 
@@ -7396,10 +5771,34 @@ echo " -------------------------------------------------------------------------
   [ "${RUN_WAIT_INTERVALL_IN_SEC}"x = ""x ] && CalculateSeconds ${RUN_WAIT_INTERVALL} RUN_WAIT_INTERVALL_IN_SEC
 
 
-  echo "${THIS_PARAMETER}" | grep "${SED_SEP}" >/dev/null
-  if [ $? -eq 0 ] ; then
-    LogError "The pipe character \"${SED_SEP}\" is NOT allowed in any parameter"
+  if [ "${SHELL_TO_USE}"x = ""x ] ; then
+    LogWarning "The shell to use for scripts is not set."
     INVALID_PARAMETER_FOUND=${__TRUE}
+  elif [ ! -x "${SHELL_TO_USE}" ]  ; then
+    LogError "The shell to use \"${SHELL_TO_USE}\" for scripts does not exist or is not executable"
+    INVALID_PARAMETER_FOUND=${__TRUE}
+  fi
+
+  if [ "${START_SCRIPT}"x != ""x ] ; then
+
+    substr "${START_SCRIPT}" 1 1 FIRST_CHAR
+    [ "${FIRST_CHAR}"x != "/"x ] && START_SCRIPT="${PWD}/${START_SCRIPT}"
+
+    if [ ! -f "${START_SCRIPT}" -o ! -x  "${START_SCRIPT}" ] ; then
+      LogError "Start script \"${START_SCRIPT}\" not found or not executable"
+      INVALID_PARAMETER_FOUND=${__TRUE}
+    fi
+  fi
+
+  if [ "${STOP_SCRIPT}"x != ""x ] ; then
+
+    substr "${STOP_SCRIPT}" 1 1 FIRST_CHAR
+    [ "${FIRST_CHAR}"x != "/"x ] && STOP_SCRIPT="${PWD}/${STOP_SCRIPT}"
+
+    if [ ! -f "${STOP_SCRIPT}" -o ! -x  "${STOP_SCRIPT}" ] ; then
+      LogError "Stop script \"${STOP_SCRIPT}\" not found or not executable"
+      INVALID_PARAMETER_FOUND=${__TRUE}
+    fi
   fi
 
 # exit the program if there are one or more invalid parameter
@@ -7412,7 +5811,7 @@ echo " -------------------------------------------------------------------------
 
   SetEnvironment
 
-# create the PID file (if requested)
+# create the PID file
 #
   if [ "${__PIDFILE}"x != ""x ] ; then
     LogRuntimeInfo "Writing the PID $$ to the PID file \"${__PIDFILE}\" ..."
@@ -7426,62 +5825,12 @@ echo " -------------------------------------------------------------------------
   export LANG
 
 # -----------------------------------------------------------------------------
+# test / debug code -- remove in your script
 
-# check for RCM support
-  if [ ${RCM_SUPPORT} = ${__TRUE} ] ; then
 
-    COPY_TABLE_PARAMETER=""
-    [ ! -x "${COPY_TABLE_BINARY}" ] && die 3 "RCM support requested but copy_table.pl was not found"
-    while [ "${RCM_USERID}"x  = ""x ] ; do
-      push ${__USER_RESPONSE_IS}
-      __USER_RESPONSE_IS=""
-      AskUser "Please enter the RCM userid (none<return> to disable RCM support): "
-      pop __USER_RESPONSE_IS
-      if [ "${USER_INPUT}"x = "none"x ] ; then
-        LogMsg "RCM support disabled."
-        RCM_SUPPORT=${__FALSE}
-        break
-      else
-        RCM_USERID="${USER_INPUT}"
-      fi
-    done
-
-    if [ "${RCM_USERID}"x != ""x ] ; then
-      while [ "${RCM_PASSWORD}"x  = ""x ] ; do
-        push ${__USER_RESPONSE_IS}
-        push __NOECHO
-        __NOECHO=${__TRUE}
-        __USER_RESPONSE_IS=""
-        AskUser "Please enter the RCM password (none<return> to disable RCM support): "
-        pop __NOECHO
-        pop __USER_RESPONSE_IS
-        echo ""
-        if [ "${USER_INPUT}"x = "none"x ] ; then
-          LogMsg "RCM support disabled."
-          RCM_SUPPORT=${__FALSE}
-          break
-        else
-          RCM_PASSWORD="${USER_INPUT}"
-        fi
-      done
-    fi
-
-    if [ ${RCM_SUPPORT} = ${__TRUE} ] ; then
-
-      [ "${RCM_USERID}"x != ""x ] && COPY_TABLE_PARAMETER="${COPY_TABLE_PARAMETER} -u ${RCM_USERID} "
-      [ "${RCM_PASSWORD}"x != ""x ] && COPY_TABLE_PARAMETER="${COPY_TABLE_PARAMETER} -p ${RCM_PASSWORD} "
-
-      if [ "${RCM_SERVER}"x != ""x ] ; then
-        COPY_TABLE_PARAMETER="${COPY_TABLE_PARAMETER} -S ${RCM_SERVER}"
-      fi
-
-      LogMsg "Checking RCM access ...."
-      TEMPVAR=$( ${COPY_TABLE_BINARY} ${COPY_TABLE_PARAMETER} -t RCM.USER_VW -q "USERID=\"${RCM_USERID}\" " )
-      [ "${TEMPVAR}"x = ""x ] && die 4 "Error accessing the RCM!"
-    fi
-  fi
-
-# -----------------------------------------------------------------------------
+# print some of the runtime variables
+#
+#  PrintRuntimeVariables
 
   LogInfo "Config file version is: \"${__CONFIG_FILE_VERSION}\" "
 
@@ -7540,307 +5889,80 @@ echo " -------------------------------------------------------------------------
 
   PARAMETER_OKAY=${__TRUE}
 
-  HOSTFILE_LIST=""
-  INVALID_HOSTS_LIST=""
 
-  LogInfo "Hostlist file(s) found are: \"${HOSTFILE_LIST}\""
-  LogInfo "Now checking the hostlist files ...."
+ # create the working directory if necessary
+ #
+  mkdir -p "${WORKDIR}" || die 5 "Can not create the working directory \"${WORKDIR}\" "
+  export WORKDIR
 
-  if [ "${HOSTFILE}"x = ""x -a "${INCLUDE_HOSTS}"x = ""x ] ; then
-    PARAMETER_OKAY=${__FALSE}
-    LogError "Parameter \"-i\" for hostlist and \"-a\" not specified - one of them is mandatory"
-  else
-    for CURFILE_X in $( echo ${HOSTFILE} | tr -s "," " " ) ; do
-      LogInfo "  Checking the file ${CURFILE_X} ..."
-      CURFILE="${CURFILE_X%%:*}"
+# remove duplicate entries from the list executables to execute
+#
+  if [ ${REMOVE_DUPLICATES} = ${__TRUE} ] ; then
+    LogInfo "Removing duplicate entries from the list of executables to execute ..."
 
-      if [ "${CURFILE#*\?}"x != "${CURFILE}"x ] ; then
-        CURFILE="${CURFILE#*?}"
-        IGONRE_MISSING_FILE=${__TRUE}
+    NEW_SCRIPTLIST=" "
+
+    NO_OF_REMOVED_ENTRIES=0
+    REMOVED_ENTRIES=""
+
+    for CUR_SCRIPT in ${SCRIPTLIST} ; do
+      if [[ ${NEW_SCRIPTLIST} == *\ ${CUR_SCRIPT}\ * ]] ; then
+        (( NO_OF_REMOVED_ENTRIES = NO_OF_REMOVED_ENTRIES +1 ))
+        REMOVED_ENTRIES="${REMOVED_ENTRIES} ${CUR_SCRIPT}"
+        LogInfo "Removing the entry \"${CUR_SCRIPT}\" from the list of executables to execute."
       else
-        IGONRE_MISSING_FILE=${__FALSE}
-      fi
-      if [ ! -r "${CURFILE}" ] ; then
-        if [ "${FILE_BASEDIR}" != ""x -a ! -r "${FILE_BASEDIR}/${CURFILE}" ] ; then
-          if [ ${IGONRE_MISSING_FILE} = ${__FALSE} ] ; then
-            LogError "Can not read the hostlist file \"${CURFILE}\" "
-            PARAMETER_OKAY=${__FALSE}
-          else
-            LogWarning "Hostlist file \"${CURFILE}\" not found or not readable"
-          fi
-        else
-          HOSTFILE_LIST="${HOSTFILE_LIST} ${FILE_BASEDIR}/${CURFILE_X}"
-        fi
-      else
-        HOSTFILE_LIST="${HOSTFILE_LIST} ${CURFILE_X}"
+        NEW_SCRIPTLIST="${NEW_SCRIPTLIST} ${CUR_SCRIPT}"
       fi
     done
-  fi
-  LogInfo "Hostlist file(s) found are: \"${HOSTFILE_LIST}\""
-
-  if [ "${HOSTFILE_LIST}"x = ""x -a "${INCLUDE_HOSTS}"x = ""x ] ; then
-    PARAMETER_OKAY=${__FALSE}
-    LogError "No hostlist file found and no hostname specified on the command line"
-  fi
-
-  EXCLUDE_HOSTS="$( echo "${EXCLUDE_HOSTS}" | tr "," " " )"
-  HOSTS_EXCLUDED=""
-
-  if [[ ${INCLUDE_HOSTS} == *\** || ${INCLUDE_HOSTS} == *\?* ]] ; then
-    PARAMETER_OKAY=${__FALSE}
-    LogError "Regular expressions for the parameter \"-i\" are NOT allowed."
-  else
-    INCLUDE_HOSTS="$( echo "${INCLUDE_HOSTS}" | tr "," " " | tr " " "\n" )"
-  fi
-
-  if [ "${SCRIPTFILE}"x = ""x ] ; then
-    PARAMETER_OKAY=${__FALSE}
-    LogError "Scriptfile not specified (parameter \"-s\")"
-  elif [ ${DO_NOT_COPY_FILE} = ${__FALSE} ] ; then
-    if [ ! -r "${SCRIPTFILE}"  ] ; then
-      if [ "${FILE_BASEDIR}" != ""x -a ! -r "${FILE_BASEDIR}/${SCRIPTFILE}" ] ; then
-        PARAMETER_OKAY=${__FALSE}
-        LogError "Scriptfile \"${SCRIPTFILE}\" not found or not readable"
-      else
-        SCRIPTFILE="${FILE_BASEDIR}/${SCRIPTFILE}"
-      fi
-    fi
-  fi
-
-  if [ -r "${SCRIPTFILE}" -a ! -x "${SCRIPTFILE}" ] ; then
-    chmod 755 "${SCRIPTFILE}" || LogWarning "Can not change the permissions for \"${SCRIPTFILE}\""
-  fi
-
-  if [ "${NEW_SSH_BINARY}"x != ""x ] ; then
-    if [ ! -x "${NEW_SSH_BINARY}" ] ; then
-      LogError "The ssh binary \"${NEW_SSH_BINARY}\" does not exist or is not executable."
-      PARAMETER_OKAY=${__FALSE}
+    if [ ${NO_OF_REMOVED_ENTRIES} = 0 ] ; then
+      LogInfo "No duplicate entries on the list found."
     else
-      SSH_BINARY="${NEW_SSH_BINARY}"
+      LogMsg "Removed ${NO_OF_REMOVED_ENTRIES} duplicate(s) from the list of executables to execute (Parameter -r)"
+      SCRIPTLIST="${NEW_SCRIPTLIST}"
     fi
   fi
 
-  if [ "${NEW_SCP_BINARY}"x != ""x ] ; then
-    if [ ! -x "${NEW_SCP_BINARY}" ] ; then
-      LogError "The scp binary \"${NEW_SCP_BINARY}\" does not exist or is not executable."
-      PARAMETER_OKAY=${__FALSE}
-    else
-      SCP_BINARY="${NEW_SCP_BINARY}"
-    fi
-  fi
-
-  if [ "${NEW_DOS2UNIX_BINARY}"x != ""x ] ; then
-    if [ ! -x "${NEW_DOS2UNIX_BINARY}" ] ; then
-      LogError "The ssh binary \"${NEW_DOS2UNIX_BINARY}\" does not exist or is not executable."
-      PARAMETER_OKAY=${__FALSE}
-    else
-      DOS2UNIX_BINARY="${NEW_DOS2UNIX_BINARY}"
-    fi
-  fi
-
-# do not use a shell for binaries
+# calculate the number of scripts to execute
 #
-  if [ "${SCRIPTFILE}"x != ""x ] ; then
-    if [ -r "${SCRIPTFILE}" ] ; then
-      file "${SCRIPTFILE}" | egrep " LSB | MSB " >/dev/null && SHELL_TO_USE=""
-    fi
-  fi
-
-# do not use a shell if -B is used
-#
-  if [ ${DO_NOT_COPY_FILE} = ${__TRUE} ] ; then
-    SHELL_TO_USE=""
-  fi
-
-# convert the file using dos2unix if running in a cygwin session
-#
-  if [[ ${__OS} == CYGWIN*  ]] ; then
-    if [ "${DO_NOT_COPY_FILE}" = ${__FALSE} -a ${IS_SCRIPT_FILE} = ${__TRUE}  ] ; then
-      if [ "${DOS2UNIX_BINARY}"x != ""x ] ; then
-        LogMsg "Calling dos2unix for the script file \"${SCRIPTFILE}\" "
-        ${DOS2UNIX_BINARY} "${SCRIPTFILE}"
-      else
-        LogWarning "This script is running in a cygwin session but dos2unix is not found in the PATH - can not convert the script file"
-      fi
-    fi
-  fi
-
-  if [ "${SSH_KEYFILE}"x != ""x ] ; then
-    if [ ! -r "${SSH_KEYFILE}" ] ; then
-      PARAMETER_OKAY=${__FALSE}
-      LogError "ssh keyfile \"${SSH_KEYFILE}\" not found or not readable"
-    fi
-  fi
-
-  if [ "${SCP_KEYFILE}"x != ""x ] ; then
-    if [ ! -r "${SCP_KEYFILE}" ] ; then
-      PARAMETER_OKAY=${__FALSE}
-      LogError "scp keyfile \"${SCP_KEYFILE}\" not found or not readable"
-    fi
-  fi
-
-  if [ "${OUTPUTFILE}"x = ""x ] ; then
-    OUTPUTFILE="${__SCRIPTNAME}.$$.log"
-  elif [ -d "${OUTPUTFILE}" ] ; then
-    OUTPUTFILE="${OUTPUTFILE}/${__SCRIPTNAME}.$$.log"
-  fi
-
-  [ "${OUTPUTFILE%/*}"x = "${OUTPUTFILE}"x ] && OUTPUTFILE="./${OUTPUTFILE}"
-  OUTPUTFILE="$( cd "${OUTPUTFILE%/*}" ; pwd )/${OUTPUTFILE##*/}"
-
-  if [ -r "${OUTPUTFILE}" -a ! -f "${OUTPUTFILE}" ] ; then
-    PARAMETER_OKAY=${__FALSE}
-    LogError "The outputfile \"${OUTPUTFILE}\" (parameter -o) is not a file"
-  fi
-
-  if [ "${SCPUSER}"x = ""x ] ; then
-    SCPUSER="${SSHUSER}"
-    [ "${SSH_KEYFILE}"x != ""x -a "${SCP_KEYFILE}"x = ""x ] && SCP_KEYFILE="${SSH_KEYFILE}"
-  fi
-
-  if [ "${SSHUSER}"x = ""x ] ; then
-    PARAMETER_OKAY=${__FALSE}
-    LogError "ssh user not specified and no default value found"
-  fi
-
-  [ ${PARAMETER_OKAY} != ${__TRUE} ] && die 5 "Errors found - exiting."
-
-  if [ ${NOSTRICTKEYS} =  ${__TRUE} ] ; then
-    SCP_OPTIONS="${SCP_OPTIONS} -o StrictHostKeyChecking=no "
-    SSH_OPTIONS="${SSH_OPTIONS} -o StrictHostKeyChecking=no "
-    if [ ${EXECUTE_PARALLEL} = ${__TRUE} ] ; then
-      SCP_OPTIONS="${SCP_OPTIONS}  -o NumberOfPasswordPrompts=0 -o ConnectTimeout=10 -o BatchMode=yes -o PasswordAuthentication=no"
-      SSH_OPTIONS="${SSH_OPTIONS}  -o NumberOfPasswordPrompts=0 -o ConnectTimeout=10 -o BatchMode=yes -o PasswordAuthentication=no"
-    fi
-  fi
+  set -- ${SCRIPTLIST}
+  NO_OF_SCRIPTS_TO_EXECUTE=$#
+   [ "${NO_OF_SCRIPTS_TO_EXECUTE}"x = "0"x ] && die 4 "No executables found."
 
   LogMsg ""
-  [ "${SHELL_TO_USE}"x = ""x ] && MSG1="executable" || MSG1="script"
-  if [ "${DO_NOT_COPY_FILE}" = ${__FALSE} ] ; then
-    TARGET_COMMAND="/tmp/tmp_$$_$( basename $0 )"
-    LogMsg "Executing the ${MSG1} "
-    LogMsg "    ${SCRIPTFILE}"
+
+
+  LogMsg "Will process ${NO_OF_SCRIPTS_TO_EXECUTE} executable(s). (Parameter -I and/or -i)"
+
+  if [ "${SCRIPTEXCLUDE_LIST}"x != ""x ] ; then
+    LogMsg "  The regular expression(s) for executables that should not be executed are (Parameter -x):"
+    LogMsg "    ${SCRIPTEXCLUDE_LIST}"
+  fi
+
+  if [ ${REMOVE_DUPLICATES} = ${__FALSE} ] ; then
+    LogMsg "  Duplicates are NOT removed from the list of executables (Parameter -r to change)"
   else
-    TARGET_COMMAND="${SCRIPTFILE}"
-    LogMsg "Executing the command "
-    LogMsg "    ${SCRIPTFILE}"
+    LogMsg "  Duplicates are removed from the list of executables (Parameter -r)"
   fi
 
-  [ "${SSH_KEYFILE}"x != ""x ] && ADD_MSG="( The ssh key file to use is \"${SSH_KEYFILE}\" )" || ADD_MSG="(using the default ssh key file)"
-  LogMsg "as ssh user "
-  LogMsg "    ${SSHUSER} ${ADD_MSG}"
+  if [ "${START_SCRIPT}"x != ""x ] ; then
+    LogMsg "Using the start script \"${START_SCRIPT}\" (Parameter -s) "
+  fi
 
-  if [ "${HOSTFILE_LIST}"x != ""x ] ; then
-    LogMsg "on every host listed in the file(s) "
+  if [ "${STOP_SCRIPT}"x != ""x ] ; then
+    LogMsg "Using the stop script \"${STOP_SCRIPT}\"  (Parameter -z) "
+  fi
 
-    for CUR_HOSTFILE in ${HOSTFILE_LIST} ; do
-      CUR_FIELD_SEPARATOR="${CUR_HOSTFILE#*:}"
-      CUR_FILE_NAME="${CUR_HOSTFILE%%:*}"
-      [ "${CUR_FILE_NAME}"x = "${CUR_FIELD_SEPARATOR}"x ] && CUR_FIELD_SEPARATOR="${FIELD_SEPARATOR}"
-      LogMsg "    ${CUR_FILE_NAME} (the field separator is \"${CUR_FIELD_SEPARATOR}\") "
-    done
+  LogMsg "The working directory is \"${WORKDIR}\". (Parameter -o)"
 
-    if [ "${INCLUDE_HOSTS}"x != ""x ] ; then
-      LogMsg "and on each of these hosts:"
-      for CUR_HOST in ${INCLUDE_HOSTS} ; do
-        LogMsg "    ${CUR_HOST}"
-      done
-    fi
+  if [ ${ADD_COMMENTS} = ${__TRUE} ] ; then
+    LogMsg "Start and stop comment lines will be added to the logfiles (Parameter -k to change)"
   else
-    LogMsg "and on each of these hosts:"
-    for CUR_HOST in ${INCLUDE_HOSTS} ; do
-      LogMsg "    ${CUR_HOST}"
-    done
+    LogMsg "No start and stop comment lines will be added to the logfiles (Parameter -k)"
   fi
-
-  if [ "${DO_NOT_COPY_FILE}" = ${__FALSE} ] ; then
-    [ "${SCP_KEYFILE}"x != ""x ] && ADD_MSG="( The scp key file to use is \"${SCP_KEYFILE}\" )" || ADD_MSG="(using the default ssh key file)"
-    LogMsg "The scp user to copy the files is "
-    LogMsg "    ${SCPUSER} ${ADD_MSG}"
-  fi
-
-
-  if [ "${EXCLUDE_HOSTS}"x != ""x ] ; then
-    LogMsg ""
-    LogMsg "Hosts to exclude are: "
-    for CUR_HOST in ${EXCLUDE_HOSTS} ; do
-      LogMsg "    ${CUR_HOST}"
-    done
-  fi
-
-
-  if [ ${DO_NOT_SORT_HOSTLIST}  = ${__TRUE} ] ; then
-    LogMsg "The list of hosts will be used without modifications"
-  fi
-
-  if [ ${IGNORE_USER_IN_FILE} = ${__TRUE} ] ] ; then
-    LogMsg "The users from the hostlists will be ignored."
-  fi
-
-  if [ "${SHELL_TO_USE}"x != ""x ] ; then
-    LogMsg ""
-    LogMsg "The shell to execute the command is "
-    LogMsg "    ${SHELL_TO_USE}"
-    LogMsg ""
-  else
-    LogMsg ""
-    LogMsg "The shell to execute the command is "
-    LogMsg "    the default shell of the user \"${SSHUSER}\" "
-    LogMsg ""
-  fi
-
-  LogMsg "Using the ssh binary \"${SSH_BINARY}\"."
-  LogMsg "Using the scp binary \"${SCP_BINARY}\"."
-  if [[ ${__OS} == CYGWIN*  ]] ; then
-    LogMsg "Using the dos2unix binary \"${DOS2UNIX_BINARY}\"."
-  fi
-
-  if [ "${SCP_OPTIONS}"x != ""x ] ; then
-    LogMsg "The additional options for scp are:"
-    LogMsg "    ${SCP_OPTIONS}"
-  fi
-
-  if [ "${SSH_OPTIONS}"x != ""x ] ; then
-    LogMsg "The additional options for ssh are:"
-    LogMsg "    ${SSH_OPTIONS}"
-  fi
-
-  LogMsg "The template for scp commands used is:"
-  LogMsg "    ${SCP_TEMPLATE}"
-
-  LogMsg "The template for ssh commands used is:"
-  LogMsg "    ${SSH_TEMPLATE}"
-
-#  if [ "${SSH_KEYFILE}"x != ""x ] ; then
-#    LogMsg "Using the ssh keyfile "
-#    LogMsg "    ${SSH_KEYFILE}"
-#  fi
-
-#  if [ "${SCP_KEYFILE}"x != ""x ] ; then
-#    LogMsg "Using the scp keyfile "
-#    LogMsg "    ${SCP_KEYFILE}"
-#  fi
-
-
-  if [ ${UNIQUE_LOGFILES} = ${__FALSE} ] ; then
-    LogMsg "The output of the commands will be logged in the file"
-    LogMsg "    ${OUTPUTFILE}"
-  else
-    LogMsg "The output of the commands will be logged in the files"
-    LogMsg "    ${OUTPUTFILE}.<hostname>"
-  fi
-
-  LogMsg ""
-  if [ ${RCM_SUPPORT} = ${__TRUE} ] ; then
-    LogMsg "RCM support is used (The RCM Userid is \"${RCM_USERID}\")"
-  else
-    LogMsg "RCM support is not used"
-  fi
-
 
   if [ ${EXECUTE_PARALLEL} = ${__TRUE} ] ; then
     LogMsg ""
-    LogMsg "The scp/ssh processes will run parallel in the background."
+    LogMsg "The executables will run parallel in the background (Parameter -d)"
     LogMsg ""
     LogMsg "The maximum number of parallel background processes is ${MAX_NO_OF_BACKGROUND_PROCESSES} (Parameter -w ${MAX_NO_OF_BACKGROUND_PROCESSES},x,x -1 = not limited)."
     LogMsg "  The wait intervall for starting the background processes is ${START_PROC_WAIT_INTERVALL_IN_SEC} second(s) (Parameter -w x,${START_PROC_WAIT_INTERVALL},x); "
@@ -7849,139 +5971,148 @@ echo " -------------------------------------------------------------------------
     LogMsg "Waiting up to ${MAX_RUN_WAIT_TIME_IN_SEC} second(s) for the background processes to finish (Parameter -W ${MAX_RUN_WAIT_TIME},x, -1 = not limited)."
     LogMsg "  The wait intervall for waiting for the background processes to finish is ${RUN_WAIT_INTERVALL_IN_SEC} second(s) (Parameter -W x,${RUN_WAIT_INTERVALL} )"
     LogMsg ""
-  else
-    LogMsg ""
-    LogMsg "The scp/ssh processes will run sequential one after the other."
-    if [ "${PREFIX}"x != ""x ] ; then
-      LogMsg "CAUTION: dry run mode is activated - no scp or ssh commands are executed!"
-    fi
-    LogMsg ""
-  fi
 
-  if [ ${SINGLE_STEP} = ${__TRUE} ] ; then
-    if [ ${EXECUTE_PARALLEL} = ${__TRUE} ] ; then
-      LogWarning "The parameter \"-D singlestep\" is not valid for parallel execution"
+    if [ "${NO_OF_LOGFILE_LINES}" = "-1" ] ; then
+      LogMsg "The logfiles of the executables will be printed after the executable finished (Parameter -D no_of_logfile_lines=${NO_OF_LOGFILE_LINES})"
+    elif [ "${NO_OF_LOGFILE_LINES}" = "0" ] ; then
+      LogMsg "The logfiles of the executables will not be printed after the executable finished (Parameter -D no_of_logfile_lines=${NO_OF_LOGFILE_LINES})"
     else
-      LogMsg "The scp and ssh commands will be executed in single step mode."
+      LogMsg "The last ${NO_OF_LOGFILE_LINES} lines of the logfiles of the executables will be printed after the executable finished (Parameter -D no_of_logfile_lines=${NO_OF_LOGFILE_LINES})"
     fi
-  fi
 
-  check_SSH_agent_status
-  if [ "${SSH_AGENT_RUNNING}" != "${__TRUE}" ] ; then
-    LogMsg ""
-    LogWarning "ssh-agent seems not to run or not to be configured"
-    LogMsg ""
-  fi
-
-  if [ "${DO_NOT_COPY_FILE}" = ${__FALSE} ] ; then
-    LogMsg ""
-    LogInfo "The temporary file on the hosts is \"${TARGET_COMMAND}\" "
-  fi
-
-  TEMP_LIST=""
-  LogInfo "Now reading the hostlist files ..."
-  for CUR_HOSTFILE in ${HOSTFILE_LIST} ; do
-
-    CUR_FIELD_SEPARATOR="${CUR_HOSTFILE#*:}"
-    CUR_FILE_NAME="${CUR_HOSTFILE%%:*}"
-    [ "${CUR_FILE_NAME}"x = "${CUR_FIELD_SEPARATOR}"x ] && CUR_FIELD_SEPARATOR="${FIELD_SEPARATOR}"
-
-    LogInfo "  Reading the file \"${CUR_FILE_NAME}\", the field separator is \"${CUR_FIELD_SEPARATOR}\" "
-    TEMP_LIST="${TEMP_LIST} $( cat "${CUR_FILE_NAME}"  | tr -d "\r" | tr -s " " | grep -v "^#" | grep -v "^$" | cut -f1 -d "${CUR_FIELD_SEPARATOR}" ) "
- done
-
-  if [ ${DO_NOT_SORT_HOSTLIST}  = ${__TRUE} ] ; then
-    LIST_OF_HOSTS_TO_PROCESS="$( echo "${TEMP_LIST}" "${INCLUDE_HOSTS}" )"
   else
-    LIST_OF_HOSTS_TO_PROCESS="$( echo "${TEMP_LIST}" "${INCLUDE_HOSTS}" | sort | uniq )"
+    LogMsg ""
+    LogMsg "The executables will run sequential one after the other (Parameter -d to change)."
+    LogMsg ""
+    if [ ${STOP_AFTER_ERROR} = ${__TRUE} ]  ; then
+      LogMsg "The execution stops after an executable ends with a non-zero reuturn code (Parameter -B)"
+    else
+      LogMsg "The return code of the executables will be ignored (Parameter -B to change)"
+    fi
+
+    if [ "${NO_OF_ERROR_LOGLINES}" = "-1" ] ; then
+      LogMsg "The logfiles of the executables will be printed after the executable finished with RC not equal zero (Parameter -D no_of_logfile_lines=${NO_OF_ERROR_LOGLINES})"
+    elif [ "${NO_OF_ERROR_LOGLINES}" = "0" ] ; then
+      LogMsg "The logfiles of the executables will not be printed after the executable finished with RC not equal zero (Parameter -D no_of_logfile_lines=${NO_OF_ERROR_LOGLINES})"
+    else
+      LogMsg "The last ${NO_OF_ERROR_LOGLINES} lines of the logfiles of the executables will be printed after the executable finished with RC not equal zero (Parameter -D no_of_logfile_lines=${NO_OF_ERROR_LOGLINES})"
+    fi
+
+     if [ "${NO_OF_OK_LOGLINES}" = "-1" ] ; then
+      LogMsg "The logfiles of the executables will be printed after the executable finished with RC nequal zero (Parameter -D no_of_logfile_lines=${NO_OF_OK_LOGLINES})"
+    elif [ "${NO_OF_OK_LOGLINES}" = "0" ] ; then
+      LogMsg "The logfiles of the executables will not be printed after the executable finished with RC equal zero (Parameter -D no_of_logfile_lines=${NO_OF_OK_LOGLINES})"
+    else
+      LogMsg "The last ${NO_OF_OK_LOGLINES} lines of the logfiles of the executables will be printed after the executable finished with RC nequal zero (Parameter -D no_of_logfile_lines=${NO_OF_OK_LOGLINES})"
+    fi
+
   fi
 
-# remove empty lines  
-  LIST_OF_HOSTS_TO_PROCESS="$( echo "${LIST_OF_HOSTS_TO_PROCESS}" | egrep -v "^$|^[ ]*$" )"
-  
-  NO_OF_HOSTS="$( echo "${LIST_OF_HOSTS_TO_PROCESS}" | wc -l | tr -d " " )"
-
-  LogMsg "There are ${NO_OF_HOSTS} hosts to process"
-  LogMsg ""
+# do not use the AskUser builtin shell!
+  __DEBUG_SHELL_IN_ASKUSER=${__FALSE}
 
   while true ; do
-    AskUser "Okay (y/N, list<return> to list all hosts to process)?"
-    if [ $? -eq ${__FALSE} ] ; then
-      if [  "${USER_INPUT}"x = "list"x ] ; then
-        LogMsg "The hosts to process are:"
-        LogMsg "-" "${LIST_OF_HOSTS_TO_PROCESS}"
-      else
-        __FORCE=${__FALSE}
-        LogMsg "-"
-        die 10 "Script aborted by the user"
-      fi
-    else
-      break
-    fi
+
+# check for the parameter "-y"
+#
+    [ "${__USER_RESPONSE_IS}"x = "y"x ] && break
+    LogMsg "-"
+
+    [ "${USER_INPUT}"x = ""x ] && LogMsg "-" "*** Enter <l><return> to list the executables to execute, <x> to list the regex for executables not to execute, <p> to view the script parameter"
+    AskUser "*** <y><return> to start or <n><return> to abort. Default is <n>: "
+    THISRC=$?
+
+    case ${USER_INPUT} in
+
+      "shell" )
+         while true ; do
+           printf "\n------------------------------------------------------------------------------------------\n"
+           printf "${__SCRIPTNAME} - debug shell - enter a command to execute (\"exit\" to leave the shell)\n"
+           printf ">> "
+           read USERINPUT
+           [ "${USERINPUT}"x = "exit"x ] && break
+           eval ${USERINPUT}
+         done
+        USER_INPUT=""
+         ;;
+
+      "l" | list )
+        LogMsg "Executables to execute (in this order) are:"
+        LogMsg "-" "$( echo "${SCRIPTLIST}" | tr -s " " |  sed "s/ /\n/g" )"
+        ;;
+
+      "x" )
+        LogMsg "Regex for executables NOt to execute are:"
+        LogMsg "-" "$( echo "${SCRIPTEXCLUDE_LIST}" | tr -s " " | sed "s/ /\n/g" )"
+        ;;
+
+      "h" )
+         ShowShortUsage
+         ;;
+
+      "H" )
+         ShowUsage
+         ;;
+
+      "p" )
+         LogMsg "The parameter for this script execution are: "
+         LogMsg "-" "${THIS_PARAMETER}"
+         USER_INPUT=""
+        ;;
+
+      "v" | "verbose" )
+        if [ ${__VERBOSE_MODE} = ${__TRUE} ] ; then
+          LogMsg "Verbose mode is now off"
+          __VERBOSE_MODE=${__FALSE}
+        else
+          LogMsg "Verbose mode is now on"
+          __VERBOSE_MODE=${__TRUE}
+        fi
+        USER_INPUT=""
+        ;;
+
+       "q" | "quit" | "exit" | "n" )
+          die 100 "Script aborted by the user."
+          ;;
+
+       * )
+        if [ ${THISRC} -ne ${__TRUE} ] ; then
+          AskUser "Really abort the script (y/N)? "
+          [ $? -eq ${__TRUE} ] && die 100 "Script aborted by the user."
+          USER_INPUT=""
+          continue
+        fi
+        break
+        ;;
+    esac
+    USER_INPUT=""
   done
+  __USER_RESPONSE_IS=""
 
-  HOST_PROCESSING_STARTED=${__TRUE}
+  __DEBUG_SHELL_IN_ASKUSER=${__TRUE}
 
-  if [ ${UNIQUE_LOGFILES} = ${__FALSE} ] ; then
-    BackupFileIfNecessary "${OUTPUTFILE}"
-    set +o noclobber
-    if [ ${__OVERWRITE_MODE} = ${__TRUE} ] ; then
-      echo >"${OUTPUTFILE}" || die 15 "Can not write to the output file \"${OUTPUTFILE}\" "
-    fi
-  fi
-
-  if [ ${SCP_WITH_FORWARD_AGENT_ENABLED} = ${__TRUE} ] ; then
-    LogDebugMsg "Creating the wrapper script for enabling agent forwarding for scp ..."
-    echo "${ENABLE_FORWARD_AGENT_FOR_SCP_CODE}" >"${SSH_WRAPPER_FOR_SCP}" && chmod 755 "${SSH_WRAPPER_FOR_SCP}"
-    if [ $? -ne 0 ] ; then
-      die 48 "Can not create the wrapper for ssh: ${SSH_WRAPPER_FOR_SCP}"
-    else
-      __LIST_OF_TMP_FILES="${__LIST_OF_TMP_FILES} ${SSH_WRAPPER_FOR_SCP}"
-    fi
-  fi
-
-  if [ ${DO_NOT_COPY_FILE} = ${__FALSE} ] ; then
-    LogInfo "Setting the read permissions for the script \"${SCRIPTFILE}\" ..."
-    chmod +r "${SCRIPTFILE}" || \
-      LogWarning "Error $? calling \"chmod +r\" for the file \"${SCRIPTFILE}\" "
-  fi
-
-  if [ "${SSH_KEYFILE}"x != ""x ] ; then
-     SSH_KEY_PARM="-i ${SSH_KEYFILE}"
-  else
-     SSH_KEY_PARM=""
-  fi
-
-  if [ "${SCP_KEYFILE}"x != ""x ] ; then
-     SCP_KEY_PARM="-i ${SCP_KEYFILE}"
-  else
-     SCP_KEY_PARM=""
-  fi
 
   PROCESSING_STARTED=${__TRUE}
 
   typeset -i COUNT=0
 
-  if [ ${CLEAN_KNOWN_HOSTS} = ${__TRUE} ] ; then
-    LogMsg "Cleanup known_hosts is enabled - creating a backup of the existing known_hosts file \"${KNOWN_HOSTS_FILE}\" in \"${KNOWN_HOSTS_FILE_BACKUP}\" ..."
-    cp "${KNOWN_HOSTS_FILE}" "${KNOWN_HOSTS_FILE_BACKUP}"
-    if [ $? -ne 0 ] ; then
-      LogError "Error creating the backup -- disabling cleanup known_hosts now"
-      CLEAN_KNOWN_HOSTS=${__FALSE}
+  LogMsg "Starting processing ..."
+
+  if [ "${START_SCRIPT}"x != ""x ] ; then
+    LogMsg "Executing the start script \"${START_SCRIPT}\" ... "
+    file "${START_SCRIPT}" | egrep " LSB | MSB " >/dev/null
+    if [ $? -eq 0 ] ; then
+      ${START_SCRIPT}
+    else
+      ${SHELL_TO_USE} -e ${START_SCRIPT}
     fi
   fi
 
-  LogMsg "Starting processing ..."
 
   if [ ${EXECUTE_PARALLEL} = ${__TRUE} ] ; then
-:
-    STOP_STARTING=${__FALSE}
 
-    if [ ${UNIQUE_LOGFILES} = ${__FALSE} ] ; then
-      TMP_OUTPUT_DIR="${__TEMPDIR}/${__SCRIPTNAME}.$$.TEMPDIR"
-      mkdir -p "${TMP_OUTPUT_DIR}" || die 55 "Can not create the temporary output directory \"${TMP_OUTPUT_DIR}\" "
-      LogMsg "The directory for the temporary output files is \"${TMP_OUTPUT_DIR}\" "
-    fi
+# --------- execute the scripts in parallel
+    STOP_STARTING=${__FALSE}
 
     PROCS=""
     BACKGROUND_PIDS=""
@@ -7992,12 +6123,16 @@ echo " -------------------------------------------------------------------------
     typeset -i SECONDS
     typeset -i HOURS
 
-    for THIS_HOST in ${LIST_OF_HOSTS_TO_PROCESS} ; do
 
-      retrieve_ssh_and_scp_user "${THIS_HOST}"
-      host_on_the_exclude_list "${CUR_HOST}"
+    for CUR_SCRIPT in ${SCRIPTLIST} ; do
+
+      script_on_the_exclude_list "${CUR_SCRIPT}"
       if [ $? -eq ${__TRUE} ] ; then
-        LogMsg "++++ The host \"${CUR_HOST}\" is on the exclude list. Ignoring this host."
+        LogMsg "++++ The executable \"${CUR_SCRIPT}\" is on the exclude list. Ignoring this executable."
+
+        SCRIPTS_EXCLUDED="${SCRIPTS_EXCLUDED} ${CUR_SCRIPT}"
+        (( NO_OF_SCRIPTS_EXCLUDED = NO_OF_SCRIPTS_EXCLUDED + 1 ))
+
         continue
       fi
 
@@ -8037,80 +6172,34 @@ echo " -------------------------------------------------------------------------
       fi
 
       (( COUNT = COUNT + 1 ))
-      LogMsg  "  ---- Processing \"${CUR_HOST}\" (ssh user is \"${CUR_SSH_USER}\") ... ( ${COUNT} from ${NO_OF_HOSTS}; ${NO_OF_PROCS_STARTED} already started) "
+      LogMsg  "  ---- Processing the executable \"${CUR_SCRIPT}\" ... ( ${COUNT} from ${NO_OF_SCRIPTS_TO_EXECUTE}; ${NO_OF_PROCS_STARTED} already started) "
 
-      if [ ${UNIQUE_LOGFILES} = ${__FALSE} ] ; then
-        CUR_OUTPUTFILE="${TMP_OUTPUT_DIR}/${CUR_HOST}.log"
-        echo >"${CUR_OUTPUTFILE}" ; THISRC=$?
-        if [ ${THISRC} -ne 0 ] ; then
-          LogError "Can not write to the logfile \"${CUR_OUTPUTFILE}\" -- skipping the host \"${CUR_HOST}\" "
-          INVALID_HOSTS_LIST="${INVALID_HOSTS_LIST} ${CUR_HOST}"
-          continue
-        fi
-      else
-        CUR_OUTPUTFILE="${OUTPUTFILE}.${CUR_HOST}"
-        BackupFileIfNecessary "${CUR_OUTPUTFILE}"
-        if [ ${__OVERWRITE_MODE} = ${__TRUE} ] ; then
-          echo >"${CUR_OUTPUTFILE}" ; THISRC=$?
-        else
-          touch "${CUR_OUTPUTFILE}" ; THISRC=$?
-        fi
-        if [ ${THISRC} -ne 0 ] ; then
-          LogError "Can not write to the logfile \"${CUR_OUTPUTFILE}\" -- skipping the host \"${CUR_HOST}\" "
-          INVALID_HOSTS_LIST="${INVALID_HOSTS_LIST} ${CUR_HOST}"
-          continue
-        fi
+      CUR_OUTPUT_FILE="${WORKDIR}/$( basename ${CUR_SCRIPT} ).$$.log"
+      touch "${CUR_OUTPUT_FILE}"
+      if [ $? -ne 0 ] ; then
+        LogError "Can not write to the log file \"${CUR_OUTPUT_FILE}\"  -- skipping this executable."
+
+        SCRIPTS_NOT_EXECUTED="${SCRIPTS_NOT_EXECUTED} ${CUR_SCRIPT}"
+        (( NO_OF_SCRIPTS_NOT_EXECUTED = NO_OF_SCRIPTS_NOT_EXECUTED + 1 ))
+        continue
       fi
 
-      get_curhost_interface "${CUR_HOST}"
+      FS_TYPE=$( file "${CUR_SCRIPT}" | egrep " LSB | MSB " ) && THIS_SHELL="" || THIS_SHELL="${SHELL_TO_USE}"
+      LogInfo "The type of \"${CUR_SCRIPT}\" is \"${FS_TYPE}\" "
 
-      if [ ${CLEAN_KNOWN_HOSTS} = ${__TRUE} ] ; then
-        egrep "^${CUR_HOST}[, ]|^${CUR_HOST_INTERFACE}[, ]" "${KNOWN_HOSTS_FILE}" >/dev/null 2>&1
-        if [ $? -eq 0 ] ; then
-          LogMsg "Removing the host \"${CUR_HOST}\" from the file \"${KNOWN_HOSTS_FILE}\" ..."
-          NEW_CONTENT="$( egrep -v "^${CUR_HOST}[, ]" "${KNOWN_HOSTS_FILE}" | egrep -v "^${CUR_HOST_INTERFACE}[, ]" )" && \
-            echo "${NEW_CONTENT}" >"${KNOWN_HOSTS_FILE}" || die 80 "Error removing the host from the known_hosts file"
-        fi
-      fi
+      ( [ ${ADD_COMMENTS} = ${__TRUE} ] && echo "# ### ---- Log of the executable \"${CUR_SCRIPT}\" executed at $( date )--- start ---"  ; \
+         eval ${THIS_SHELL} "${CUR_SCRIPT}" \
+        [ ${ADD_COMMENTS} = ${__TRUE} ] && echo "# ### ---- Log of the executable \"${CUR_SCRIPT}\" executed at $( date ) --- end ---"  ) >>"${CUR_OUTPUT_FILE}" 2>&1 &
 
-      CUR_SSH_COMMAND=$( evaluate_template "ssh" )
-      CUR_SCP_COMMAND=$( evaluate_template "scp" )
+      LogMsg "    The log file is \"${CUR_OUTPUT_FILE}\" "
 
-#          "${PREFIX}" "${SCP_BINARY}" ${SCP_OPTIONS} ${SCP_KEY_PARM} "${SCRIPTFILE}" "${CUR_SCP_USER}@${CUR_HOST_INTERFACE}:${TARGET_COMMAND}" && \
-#          "${PREFIX}" "${SSH_BINARY}" ${SSH_OPTIONS} ${SSH_KEY_PARM} -l "${CUR_SSH_USER}" "${CUR_HOST_INTERFACE}" ${SHELL_TO_USE} ${TARGET_COMMAND} ; \
-
-#          "${PREFIX}" "${SSH_BINARY}" ${SSH_OPTIONS} ${SSH_KEY_PARM} -l "${CUR_SSH_USER}" "${CUR_HOST_INTERFACE}" ${SHELL_TO_USE} ${TARGET_COMMAND}  ; \
-
-      if [ ${DO_NOT_COPY_FILE} = ${__FALSE} ] ; then
-
-        [ ${PRINT_CMD} = ${__TRUE} ] && LogMsg "The scp command is: ${CUR_SCP_COMMAND}"
-        [ ${PRINT_CMD} = ${__TRUE} ] && LogMsg "The ssh command is: ${CUR_SSH_COMMAND}"
-        
-        ( [ ${ADD_COMMENTS} = ${__TRUE} ] && echo "# ### ---- Log of the script \"${SCRIPTFILE}\" executed on host \"${CUR_HOST}\" as user \"${CUR_SSH_USER}\" at $( date )--- start ---"  ; \
-            echo "*** Executing ${CUR_SCP_COMMAND} " ; \
-            echo "" ; \
-            ${PREFIX} ${CUR_SCP_COMMAND} && \
-            echo "" ; \
-            echo "*** Executing ${CUR_SSH_COMMAND}: " ; \
-            echo "" ; \
-            ${PREFIX} ${CUR_SSH_COMMAND} ; \
-            echo "" ; \
-          [ ${ADD_COMMENTS} = ${__TRUE} ] && echo "# ### ---- Log of the script executed on host \"${CUR_HOST}\" as user \"${CUR_SSH_USER}\" at $( date ) --- end ---"  ) >>"${CUR_OUTPUTFILE}" 2>&1 &
-      else
-        [ ${PRINT_CMD} = ${__TRUE} ] && LogMsg "The ssh command is: ${CUR_SSH_COMMAND}"
-
-        ( [ ${ADD_COMMENTS} = ${__TRUE} ] && echo "# ### ---- Log of the command \"${SCRIPTFILE}\" executed on host \"${CUR_HOST}\" as user \"${CUR_SSH_USER}\" at $( date ) --- start ---"  ; \
-            echo "*** Executing ${CUR_SSH_COMMAND}: " ; \
-            echo "" ; \
-            ${PREFIX} ${CUR_SSH_COMMAND} ; \
-            echo "" ; \
-          [ ${ADD_COMMENTS} = ${__TRUE} ] && echo "# ### ---- Log of the command executed on host \"${CUR_HOST}\" as user \"${CUR_SSH_USER}\" at $( date ) --- end ---"  ) >>"${CUR_OUTPUTFILE}" 2>&1 &
-      fi
+      SCRIPTS_EXECUTED="${SCRIPTS_EXECUTED} ${CUR_SCRIPT}"
+      (( NO_OF_SCRIPTS_EXECUTED = NO_OF_SCRIPTS_EXECUTED + 1 ))
 
       (( NO_OF_PROCS_STARTED = NO_OF_PROCS_STARTED + 1 ))
 
-      [ "${PROCS}"x = ""x ] && PROCS="${CUR_HOST}#${!}#${CUR_OUTPUTFILE}" || PROCS="${CUR_HOST}#${!}#${CUR_OUTPUTFILE};${PROCS}"
-      LogInfo "  command started via ssh on ${CUR_HOST}; the process PID=$! started at $( date )"
+      [ "${PROCS}"x = ""x ] && PROCS="${CUR_SCRIPT}#${!}#${CUR_OUTPUT_FILE}" || PROCS="${CUR_SCRIPT}#${!}#${CUR_OUTPUT_FILE};${PROCS}"
+      LogInfo "  command \"${THIS_SHELL} ${CUR_SCRIPT}\" started; the process PID=$! started at $( date )"
       [ "${BACKGROUND_PIDS}"x = ""x ] && BACKGROUND_PIDS="$!" || BACKGROUND_PIDS="${BACKGROUND_PIDS} $!"
 
     done
@@ -8162,24 +6251,28 @@ echo " -------------------------------------------------------------------------
         PROCS="${PROCS#*;}"
         [ "${PROCS}"x = "${CUR_PROC_LINE}"x  -o "${PROCS}"x = ";"x ] && PROCS=""
 
-        CUR_HOST="${CUR_PROC_LINE%%#*}"
+        CUR_SCRIPT="${CUR_PROC_LINE%%#*}"
         CUR_OUTPUT_FILE="${CUR_PROC_LINE##*#}"
         CUR_PID=${CUR_PROC_LINE#*#} ; CUR_PID=${CUR_PID%%#*}
 
         LogInfo "    PROCS: \"${PROCS}\" "
         LogInfo "    CUR_PROC_LINE: \"${CUR_PROC_LINE}\" "
         LogInfo "    CUR_OUTPUT_FILE: \"${CUR_OUTPUT_FILE}\" "
-        LogInfo "    CUR_HOST: \"${CUR_HOST}\" "
+        LogInfo "    CUR_SCRIPT: \"${CUR_SCRIPT}\" "
         LogInfo "    CUR_PID: \"${CUR_PID}\" "
 
         PS_P_OUTPUT="$( ps -p ${CUR_PID} 2>&1 )"
         if [ $? -eq 0 ] ; then
           [ "${STILL_RUNNING_PROCS}"x = ""x ] && STILL_RUNNING_PROCS="${CUR_PROC_LINE}" || STILL_RUNNING_PROCS="${STILL_RUNNING_PROCS};${CUR_PROC_LINE}"
-          LogMsg "    Process \"${CUR_PID}\" for ${CUR_HOST} is still running"
+          LogMsg "    Process \"${CUR_PID}\" for ${CUR_SCRIPT} is still running"
+          LogMsg "      The log file is \"${CUR_OUTPUT_FILE}\" "
+
           (( NO_OF_STILL_RUNNING_PROCS = NO_OF_STILL_RUNNING_PROCS + 1 ))
           continue
         else
-          LogMsg "    Process \"${CUR_PID}\" for ${CUR_HOST} finished"
+          LogMsg "    Process \"${CUR_PID}\" for ${CUR_SCRIPT} finished"
+          LogMsg "      The log file is \"${CUR_OUTPUT_FILE}\" "
+          ViewLogfile "${CUR_OUTPUT_FILE}" ${NO_OF_LOGFILE_LINES}
           PROC_LOG_FILES="${PROC_LOG_FILES} ${CUR_OUTPUT_FILE}"
         fi
 
@@ -8215,127 +6308,74 @@ echo " -------------------------------------------------------------------------
     LogMsg "The loop to wait for the background processes ended at $( date ), the runtime is $( printf "%d:%.2d:%.2d" ${HOURS} ${MINUTES} ${SECONDS} )."
     LogMsg ""
 
-    if [ ${UNIQUE_LOGFILES} = ${__FALSE} ] ; then
-      LogMsg "Collecting the result logs ..."
-
-      for CUR_LOG_FILE in ${PROC_LOG_FILES} ; do
-        LogMsg "  Processing \"${CUR_LOG_FILE}\" ..."
-
-        if [ -r "${CUR_LOG_FILE}" ] ; then
-          executeCommand cat "${CUR_LOG_FILE}" >>"${OUTPUTFILE}"
-        else
-          LogError "Logfile \"${CUR_LOG_FILE}\" not found or not readable"
-        fi
-      done
-    fi
-
   else
 # --------- execute the script sequential
 
     typeset -i COUNT=0
 
-    HOSTS_IGNORED_ON_USER_REQUEST=""
-    HOSTS_PROCESSED=""
+    for CUR_SCRIPT in ${SCRIPTLIST} ; do
 
-    for THIS_HOST in ${LIST_OF_HOSTS_TO_PROCESS} ; do
-
-      retrieve_ssh_and_scp_user "${THIS_HOST}"
-
-      host_on_the_exclude_list "${CUR_HOST}"
+      script_on_the_exclude_list "${CUR_SCRIPT}"
       if [ $? -eq ${__TRUE} ] ; then
-        LogMsg "++++ The host \"${CUR_HOST}\" is on the exclude list. Ignoring this host."
+        LogMsg "++++ The executable \"${CUR_SCRIPT}\" is on the exclude list. Ignoring this executable."
+
+        SCRIPTS_EXCLUDED="${SCRIPTS_EXCLUDED} ${CUR_SCRIPT}"
+        (( NO_OF_SCRIPTS_EXCLUDED = NO_OF_SCRIPTS_EXCLUDED + 1 ))
+
         continue
       fi
 
-      [ "${PREFIX}"x != ""x ] && ADD_MSG="(running in dry run mode)" || ADD_MSG=""
-      if [ ${SINGLE_STEP} = ${__TRUE} ] ; then
-         LogMsg "-" "Press <return> to continue with the host \"${CUR_HOST}\" ${ADD_MSG}"
-
-         push ${__USER_RESPONSE_IS}
-         __USER_RESPONSE_IS=""
-         AskUser "(<s><return> to skip this host, <g><return> to end single step mode, or <q><return> to end the processing) >> "
-         pop __USER_RESPONSE_IS
-
-         if [ "${USER_INPUT}"x = "s"x ] ; then
-           LogMsg "Skipping the host \"${CUR_HOST}\" ..."
-           HOSTS_IGNORED_ON_USER_REQUEST="${HOSTS_IGNORED_ON_USER_REQUEST} ${CUR_HOST}"
-           continue
-         elif [ "${USER_INPUT}"x = "g"x ] ; then
-           LogMsg "Deactivating single step mode."
-           SINGLE_STEP=${__FALSE}
-         elif [ "${USER_INPUT}"x = "q"x ] ; then
-           LogMsg "-"
-           LogMsg "Script aborted by the user"
-           break
-         else
-           LogMsg "-"
-         fi
-       fi
-
       (( COUNT = COUNT + 1 ))
-      HOSTS_PROCESSED="${HOSTS_PROCESSED} ${CUR_HOST}"
-
       LogMsg "-"
-      LogMsg  "---- Processing \"${CUR_HOST}\" (ssh user is \"${CUR_SSH_USER}\", scp user is \"${CUR_SCP_USER}\")  ... ( ${COUNT} from ${NO_OF_HOSTS}) "
+      LogMsg  "---- Processing \"${CUR_SCRIPT}\" ... ( ${COUNT} from ${NO_OF_SCRIPTS_TO_EXECUTE}) "
 
-      if [ ${UNIQUE_LOGFILES} = ${__FALSE} ] ; then
-        CUR_OUTPUTFILE="${OUTPUTFILE}"
+      CUR_OUTPUT_FILE="${WORKDIR}/$( basename ${CUR_SCRIPT} ).$$.log"
+      echo > "${CUR_OUTPUT_FILE}"
+      if [ $? -ne 0 ] ; then
+        LogError "Can not write to the log file \"${CUR_OUTPUT_FILE}\"  -- skipping this executable."
+
+        SCRIPTS_NOT_EXECUTED="${SCRIPTS_NOT_EXECUTED} ${CUR_SCRIPT}"
+        (( NO_OF_SCRIPTS_NOT_EXECUTED = NO_OF_SCRIPTS_NOT_EXECUTED + 1 ))
+        continue
+      fi
+
+      file "${CUR_SCRIPT}" | egrep " LSB | MSB " >/dev/null && THIS_SHELL="" || THIS_SHELL="${SHELL_TO_USE}"
+
+      [ ${ADD_COMMENTS} = ${__TRUE} ] && echo "# ### ---- Log of the executable \"${CUR_SCRIPT}\" executed  at $( date )--- start ---" >>"${CUR_OUTPUT_FILE}"
+      ${THIS_SHELL} "${CUR_SCRIPT}" >>"${CUR_OUTPUT_FILE}" 2>&1
+      THISRC=$?
+      [ ${ADD_COMMENTS} = ${__TRUE} ] && echo "# ### ---- Log of the executable \"${CUR_SCRIPT}\" executed at $( date ) --- end ---"    >>"${CUR_OUTPUT_FILE}"
+      LogMsg "  The RC is ${THISRC}; the log file is \"${CUR_OUTPUT_FILE}\""
+
+      SCRIPTS_EXECUTED="${SCRIPTS_EXECUTED} ${CUR_SCRIPT}"
+      (( NO_OF_SCRIPTS_EXECUTED = NO_OF_SCRIPTS_EXECUTED + 1 ))
+
+      if [ ${THISRC} != 0 ] ; then
+        ViewLogfile "${CUR_OUTPUT_FILE}" ${NO_OF_ERROR_LOGLINES}
       else
-        CUR_OUTPUTFILE="${OUTPUTFILE}.${CUR_HOST}"
-        BackupFileIfNecessary "${CUR_OUTPUTFILE}"
-        if [ ${__OVERWRITE_MODE} = ${__TRUE} ] ; then
-          echo >"${CUR_OUTPUTFILE}" ; THISRC=$?
-        else
-          touch "${CUR_OUTPUTFILE}" ; THISRC=$?
-        fi
-        if [ ${THISRC} -ne 0 ] ; then
-          LogError "Can not write to the logfile \"${CUR_OUTPUTFILE}\" -- skipping the host \"${CUR_HOST}\" "
-          INVALID_HOSTS_LIST="${INVALID_HOSTS_LIST} ${CUR_HOST}"
-          continue
-        fi
+        ViewLogfile "${CUR_OUTPUT_FILE}" ${NO_OF_OK_LOGLINES}
       fi
 
-      get_curhost_interface "${CUR_HOST}"
-
-      if [ ${CLEAN_KNOWN_HOSTS} = ${__TRUE} ] ; then
-        egrep "^${CUR_HOST}[, ]|^${CUR_HOST_INTERFACE}[, ]" "${KNOWN_HOSTS_FILE}" >/dev/null 2>&1
-        if [ $? -eq 0 ] ; then
-          LogMsg "Removing the host \"${CUR_HOST}\" from the file \"${KNOWN_HOSTS_FILE}\" ..."
-          NEW_CONTENT="$( egrep -v "^${CUR_HOST}[, ]" "${KNOWN_HOSTS_FILE}" | egrep -v "^${CUR_HOST_INTERFACE}[, ]" )" && \
-            echo "${NEW_CONTENT}" >"${KNOWN_HOSTS_FILE}" || die 80 "Error removing the host from the known_hosts file"
-        fi
-      fi
-
-      CUR_SSH_COMMAND="$( evaluate_template "ssh" )"
-      CUR_SCP_COMMAND="$( evaluate_template "scp" )"
-
-      if [ ${DO_NOT_COPY_FILE} = ${__FALSE} ] ; then
-#        executeCommand "${PREFIX}" "${SCP_BINARY}" "${SCP_OPTIONS}" "${SCP_KEY_PARM}" "${SCRIPTFILE}" "${CUR_SCP_USER}@${CUR_HOST_INTERFACE}:${TARGET_COMMAND}"
-
-        [ ${PRINT_CMD} = ${__TRUE} ] && LogMsg "The scp command is: ${CUR_SCP_COMMAND}"
-               
-        ${PREFIX} ${CUR_SCP_COMMAND} | tee -a "${CUR_OUTPUTFILE}"
-        if [ $? -ne 0 ] ; then
-          LogError "Error copying the script to the host \"${CUR_HOST}\" - could not execute the script on that host"
-          INVALID_HOSTS_LIST="${INVALID_HOSTS_LIST} ${CUR_HOST}"
-          continue
-        fi
-      fi
-
-      if [ ${ADD_COMMENTS} = ${__TRUE} ] ; then
-        echo "# ### ---- Log of the script \"${SCRIPTFILE}\" executed on host \"${CUR_HOST}\" --- start ---" >>"${CUR_OUTPUTFILE}"
-      fi
-
-      [ ${PRINT_CMD} = ${__TRUE} ] && LogMsg "The ssh command is: ${CUR_SSH_COMMAND}"
-      ${PREFIX} ${CUR_SSH_COMMAND} | tee -a "${CUR_OUTPUTFILE}"
-
-      if [ ${ADD_COMMENTS} = ${__TRUE} ] ; then
-        echo "# ### ---- Log of the script executed on host \"${CUR_HOST}\" --- end ---" >>"${CUR_OUTPUTFILE}"
-        echo "" >>"${CUR_OUTPUTFILE}"
-      fi
+      [ ${THISRC} -ne 0 -a ${STOP_AFTER_ERROR} = ${__TRUE} ] && die 15 "The executable \"${CUR_SCRIPT}\" ends with RC=${THISRC}"
 
     done
   fi
+
+
+  if [ "${STOP_SCRIPT}"x != ""x ] ; then
+    LogMsg "Executing the stop script \"${STOP_SCRIPT}\" ... "
+    file "${STOP_SCRIPT}" | egrep " LSB | MSB " >/dev/null
+    if [ $? -eq 0 ] ; then
+      ${STOP_SCRIPT}
+    else
+      ${SHELL_TO_USE} -e ${STOP_SCRIPT}
+    fi
+  fi
+
+
+  LogMsg ""
+  LogMsg "All done (${NO_OF_SCRIPTS_EXECUTED} executable(s) )."
+  LogMsg ""
 
   die ${__MAINRC}
 

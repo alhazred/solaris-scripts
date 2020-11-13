@@ -19,37 +19,28 @@
 #
 # CDDL HEADER END
 
-__SCRIPT_TEMPLATE_VERSION="1.08 07/05/2004"
-__SHORT_DESC="wipe out disks"
+__SCRIPT_TEMPLATE_VERSION="1.03 02/19/2004"
 
-__TRUE=0
-__FALSE=1
-
+__SHORT_DESC="split an ISO image into slices "
 __SCRIPT_VERSION="1.00"
 
-# set to ${__TRUE} for scripts that must be executed by root only
-__MUST_BE_ROOT=${__TRUE}
+# set to 0 for scripts that must be executed by root only
+__MUST_BE_ROOT=1
 
-# set to ${__TRUE} for scripts that can not run more than one instance at the same time
-__ONLY_ONCE=${__FALSE}
+# set to 0 for scripts that can not run more than one instance at the same time
+__ONLY_ONCE=1
 
-__VERBOSE_MODE=${__FALSE}
+__VERBOSE_MODE=1
 
-__QUIET_MODE=${__FALSE}
+__QUIET_MODE=1
 
-
-  DISKS_TO_EXCLUDE=""
-  DEF_WRITE_COUNT=3
-  WRITE_COUNT=${DEF_WRITE_COUNT}  
-  XSERVER_ADDRESS=""
-  
 # -----------------------------------------------------------------------------
 #
-# script to wipeout harddisks
+# split_cdrom_isoimage.sh - split an ISO image into slices
 #
 # Author: Bernd Schemmer (Bernd.Schemmer@gmx.de)
 #
-# Version: ${__SCRIPT__TEMPLATE_VERSION}
+# Version: ${__SCRIPT__VERSION}
 #
 # Supported OS: Solaris 
 #
@@ -82,9 +73,8 @@ __QUIET_MODE=${__FALSE}
 # init the global variables
 #
 
-__THISRC=0
 
-__USER_RESPONSE_IS=""
+__THISRC=0
 
 __SCRIPTNAME="$( basename $0 )"
 __SCRIPTDIR="$( dirname $0 )"
@@ -104,17 +94,13 @@ __LOGFILE="/var/tmp/${__SCRIPTNAME}.LOG"
 # temporary files
 __TEMPFILE1="/tmp/${__SCRIPTNAME}.$$.TEMP1"
 __TEMPFILE2="/tmp/${__SCRIPTNAME}.$$.TEMP2"
-__LIST_OF_TEMPFILES="${__TEMPFILE1} ${__TEMPFILE2} "
+__LIST_OF_TEMPFILES="${__TEMPFILE1} ${__TEMPFILE2}"
 
 # lock file
 __LOCKFILE="/tmp/${__SCRIPTNAME}.lock"
 __LOCKFILE_CREATED=1
 
 __EXITROUTINES=""
-
-# reboot necessary ?
-__REBOOT_REQUIRED=${__FALSE}
-__REBOOT_PARAMETER=""
 
  typeset REST=
  who am i | read __USERID REST
@@ -123,24 +109,14 @@ __REBOOT_PARAMETER=""
 # debugging routines
 #
 
-# --------------------------------------
-# ShowGlobalVariables
-#
-# print all global variables and their values
-#
-# usage: ShwoGlobalVariables
-#
-# returns: -
-#
 ShowGlobalVariables() {
  typeset CURVAR=
 
   LogMsg "Defined global variables: "
-  for CURVAR in  __SCRIPT_VERSION __SHORT_DESC \
-                 __USER_RESPONSE_IS __TRUE __FALSE \
+  for CURVAR in  __SCRIPT_VERSION \
                  __SCRIPT_TEMPLATE_VERSION __MUST_BE_ROOT __ONLY_ONCE \
                  __THISRC __VERBOSE_MODE  __QUIET_MODE \
-                 __SCRIPTNAME __SCRIPTDIR  __PROG_DIR \
+                 __SCRIPTNAME __SCRIPTDIR  \
 	         __HOSTNAME __OS __OS_VERSION __OS_RELEASE \
                  __MACHINE_CLASS __MACHINE_TYPE __MACHINE_ARC \
 	         __START_DIR \
@@ -149,7 +125,6 @@ ShowGlobalVariables() {
 	         __TEMPFILE1 __TEMPFILE2 __LIST_OF_TEMPFILES \
 	         __EXITROUTINES \
 		 __USERID \
-		 __REBOOT_REQUIRED __REBOOT_PARAMETER  \
 	       ;
  do
    eval "CURVALUE=\$${CURVAR}"
@@ -162,34 +137,6 @@ ShowGlobalVariables() {
 # -----------------------------------------------------------------------------
 # sub routines
 #
-
-# --------------------------------------
-# GetProgramDirectory
-#
-# get the directory where a program resides
-#
-# usage: GetProgramDir [programpath/]progranname
-#
-# returns: PRGDIR=<the directory with the program>
-#
-GetProgramDirectory() {
-  
-# resolve links - $1 may be a softlink
-  typeset PRG="$1"
-   
-  while [ -h "$PRG" ] ; do
-    ls=`ls -ld "$PRG"`
-    link=`expr "$ls" : '.*-> \(.*\)$'`
-    if expr "$link" : '.*/.*' > /dev/null; then
-      PRG="$link"
-    else
-      PRG=`dirname "$PRG"`/"$link"
-    fi
-  done
- 
-  PRGDIR=`dirname "$PRG"`
-}
-
 
 # --------------------------------------
 # UserIsRoot
@@ -220,6 +167,7 @@ UserIsRoot() {
 #          2 - the user does not exist on this machine
 #          3 - missing parameter
 #
+
 UserIs() {
   typeset THISRC=3
   typeset USERID=""
@@ -235,66 +183,40 @@ UserIs() {
 
   return ${THISRC}
 }
-
-# ======================================
  
-# --------------------------------------
-# LogMsg
+  
+
+
 #
-# print a message to STDOUT and write it also to the logfile
-#
-# usage: LogMsg message
-#
-# returns: -
+# Usage: LogMsg message_to_write
 #
 LogMsg() {
   typeset THISMSG="[$(date +"%d.%m.%Y %H:%M:%S")] $*"
 
-  [  ${__QUIET_MODE} -ne ${__TRUE} ] && echo "${THISMSG}" 
-  [ "${__LOGFILE}"x != ""x ] && [ -f ${__LOGFILE} ] &&  echo "${THISMSG}" >>${__LOGFILE} 
+  [  ${__QUIET_MODE} -ne 0 ] && echo ${THISMSG} 
+  [ "${__LOGFILE}"x != ""x ] && [ -f ${__LOGFILE} ] &&  echo ${THISMSG} >>${__LOGFILE} 
 }
 
-# --------------------------------------
-# LogInfo
 #
-# print a message to STDOUT and write it also to the logfile 
-# only if in verbose mode
-#
-# usage: LogInfo message
-#
-# returns: -
+# Usage: LogInfo message_to_write
 #
 LogInfo() {
-  [ ${__VERBOSE_MODE} = ${__TRUE} ] && LogMsg "INFO: $*"
+  [ ${__VERBOSE_MODE} = 0 ] && LogMsg "INFO: $*"
 }
 
-# --------------------------------------
-# LogWarning
 #
-# print a warning to STDOUT and write it also to the logfile
-#
-# usage: LogWarning message
-#
-# returns: -
+# Usage: LogWarning message_to_write
 #
 LogWarning() {
   LogMsg "WARNING: $*"
 }
 
-# --------------------------------------
-# LogError
 #
-# print an error message to STDOUT and write it also to the logfile
-#
-# usage: LogError message
-#
-# returns: -
+# Usage: LogErrorMsg message_to_write
 #
 LogError() {
   LogMsg "ERROR: $*"
 }
-
-# ======================================
 
 # --------------------------------------
 # CreateLockFile
@@ -337,16 +259,8 @@ RemoveLockFile() {
   return 2
 }
 
-# ======================================
-
-# --------------------------------------
-# CreateTemporaryFiles
 #
-# create the temporary files
-#
-# usage: CreateTemporaryFiles
-#
-# returns: -
+# Usage: CreateTemporayFiles
 #
 CreateTemporaryFiles() {
   typeset CURFILE=
@@ -362,14 +276,8 @@ CreateTemporaryFiles() {
   return 0
 }
 
-# --------------------------------------
-# DeleteTemporaryFiles
 #
-# delete the temporary files
-#
-# usage: DeleteTemporaryFiles
-#
-# returns: -
+# Usage: DeleteTemporayFiles
 #
 DeleteTemporaryFiles() {
   typeset CURFILE=
@@ -387,16 +295,9 @@ DeleteTemporaryFiles() {
   return 0
 }
 
-# ======================================
 
-# ---------------------------------------
-# BackupExistingFiles
-#
-# backup all files in a directory (without subdirectories)
 #
 # usage: BackupExistingFiles dir_to_backup backup_target_directory
-#
-# returns: -
 #
 BackupExistingFiles() {
   typeset THISRC=1
@@ -422,14 +323,8 @@ BackupExistingFiles() {
   return ${THISRC}
 }
 
-# ---------------------------------------
-# RestoreFilesFromBackup
 #
-# restore all files in a directory (without subdirectories)
-#
-# usage: RestoreFilesFromBackup backup_dir dir_to_restore
-#
-# returns: -
+# Usage: RestoreFilesFromBackup backup_dir dir_to_restore
 #
 RestoreFilesFromBackup() {
   typeset THISRC=1
@@ -457,23 +352,17 @@ RestoreFilesFromBackup() {
 }
 
 
-# ======================================
-
-# ---------------------------------------
-# cleanup
 #
-# house keeping at program end
+# Function: Housekeeping
 #
-# usage: cleanup
-#
-# returns: -
+# Usage: cleanup
 #
 cleanup() {
   typeset EXIT_ROUTINE=
   
   DeleteTemporaryFiles
   
-  [ ${__MUST_BE_ROOT} ] -eq ${__TRUE} ] && RemoveLockFile
+  [ ${__MUST_BE_ROOT} ] -eq 0 ] && RemoveLockFile
 
   if [ "${__EXITROUTINES}"x !=  ""x ] ; then
     LogInfo "Calling the exitroutines \"${__EXITROUTINES}\" ..."
@@ -482,16 +371,11 @@ cleanup() {
       eval ${EXIT_ROUTINE}
     done
   fi
+
 }
 
-# ---------------------------------------
-# die
 #
-# print an message and end the program
-#
-# usage: die returncode message
-#
-# returns: -
+# Usage: die returncode errorMessage
 #
 die() {
   typeset THISRC=$1
@@ -506,171 +390,40 @@ die() {
   cleanup
 
   LogMsg "The log file used was \"${__LOGFILE}\" "
-  __QUIET_MODE=${__FALSE}
+  __QUIET_MODE=1   
   LogMsg "${__SCRIPTNAME} ended on $( date )."
   LogMsg "The RC is ${THISRC}."
   
   exit ${THISRC}
 }
 
-# --------------------------------------
-# AskUser
 #
-# Ask the user (or use defaults depending on the parameter -n and -y)
-#
-# Usage: AskUser "message" 
-#        
-# returns USER_INPUT contains the user input
-#
-AskUser() {
-
-  typeset THISRC=""
-  
-  case ${__USER_RESPONSE_IS} in 
-     
-   "y" ) USER_INPUT="y" ; THISRC=${__TRUE} ; shift
-         ;;
-
-   "n" ) USER_INPUT="n" ; THISRC=${__FALSE} ; shift
-         ;;
-	   
-     * ) printf "$* "
-         read USER_INPUT
-         ;;
-  esac	  
-
-  return ${THISRC}
-}
-
-# --------------------------------------
-# CheckReboot
-#
-# Check if a reboot is necessary
-#
-# Usage: CheckReboot
-#
-CheckReboot() {
-  typeset USER_INPUT=
-  
-  if [ ${__REBOOT_REQUIRED} -eq 0 ] ; then
-    LogMsg "The changes made to the system require a reboot"
-
-    AskUser "Do you want to reboot new (y/n, default is NO)?"
-    if [ ${USER_INPUT} = "y" ] ; then
-      LogMsg "Rebooting now ..."
-      echo "???" reboot ${__REBOOT_PARAMETER}
-    fi
-  fi
-}
-
-# ---------------------------------------
-# ScriptAbort
-#
-# script handler for signals
-#
-# usage: -
-#
-# returns: -
+# Trap handler
 #
 ScriptAbort() {
   die 501 "Script aborted by an external signal"
 }
 
-# ======================================
-
-# ---------------------------------------
-# ShowUsage
-#
-# print the usage help
-#
-# usage: ShowUsage
-#
-# returns: -
-#
 ShowUsage() {
 
 cat <<EOT
 
   ${__SCRIPTNAME} ${__SCRIPT_VERSION} - ${__SHORT_DESC}
 
-  Usage: ${__SCRIPTNAME} [-v] [-q] [-h] [-l logfile] [-y|-n] [-x] 
-                        [-N count] [-x exclude_disk] [-X xserveraddr]
+  Usage: ${__SCRIPTNAME} [-v] [-q] [-h] [-l logfile] [-i isoimage] [-o outputdir]
   
   Parameter:
-
-      -N - "count" is the no of writes (def.:${DEF_WRITE_COUNT})
-      -x - do not wipe the disk "exclude_disk"
-      -X - start every format in an xterm a on the xserver "xserveraddr"
-
+    
       -v - turn verbose mode on
       -q - turn quiet mode on
       -h - show usage
       -l - set the logfile
-      -y - assume yes to all questions
-      -n - assume no to all questions
 
+      -i - iso image file
+      -o - directory for the output files (def.: current directory)
 EOT
 
   return 0      
-}
-
-# ---------------------------------------
-# DetectBootDisk
-#
-# try to detect the boot disk
-#
-# usage: DetectBootDisk
-#
-# returns: ROOTDISK contains a list of boot disks (or "" if no root disks are detected)
-#          ROOTDISK_OK is $__TRUE if we're sure or $__FALSE if not
-#
-# Notes: This code works only for plain slices and SDS mirrors correct; 
-#        for Veritas volumes it may or may not work
-#
-#        14.07.2004: NOT USED AT THIS TIME BECAUSE I HAVE TO DO FURTHER TESTING /bs
-#
-DetectBootDisk() {
-
-  ROOTDISK=""
-  ROOTDISK_OK="${__FALSE}"
-  
-  typeset METADEVICE=""
-  typeset ROOTDISK1=""
-  typeset ROOTDISK2=""
-  
-# try to get the root disk ...
-  set -- `df -k | grep -i "/$"`
-  oIFS="$IFS"
-  IFS="/"
-  set -- $1
-  IFS="$oIFS"
-
-  if [ "$3"x = "md"x ] ; then
-# the root disk is a meta device (SDS)
-  METADEVICE=$5
-  set -- `metastat -p $5`
-    if [ "$2" = "-m" ] ; then
-# the root disk is a mirrored metadevice
-      set -- `metastat -p $3` 
-      ROOTDISK1=${4%%s*}
-      set -- `metastat -p $4` 
-      ROOTDISK1=${4%%s*}
-      ROOTDISK="${ROOTDISK1} ${ROOTDISK2}"
-    else 
-# the root disk is a simple meta device (SDS)
-      ROOTDISK=${4%%s*}
-    fi
-  elif [ "$3"x = "vx"x ] ; then
-# the root disk is a veritas device (VxVM)
-    set -- `vxdisk -q -g rootdg list`
-    ROOTDISK=${1%%s*}
-  else
-  # the root disk is a plain slice
-    ROOTDISK=${4%%s*}
-    ROOTDISK_OK=${__TRUE}
-  fi
-
-return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -679,7 +432,6 @@ return 0
 
 # use a temporary log file until we know the real log file
 
-  
   __TEMPFILE_CREATED=1
   __MAIN_LOGFILE=${__LOGFILE}
   
@@ -689,12 +441,13 @@ return 0
   trap ScriptAbort 1 2 3 4 6 9 15
   
 # add additional exit routines
-# __EXITROUTINES="${EXITROUTINES} CheckReboot"  
+# __EXITROUTINES="${EXITROUTINES} "  
 
   LogMsg "${__SCRIPTNAME} started on $( date ) "
   
+
   THIS_PARAMETER=$*
-  set -- $( getopt ynvqhl:x:N:X: $* ) 
+  set -- $( getopt vqhl:i:o: $* ) 
   if [ $? != 0 ] ; then
     LogError "Error evaluating the parameter \"${THIS_PARAMETER}\" "
     ShowUsage
@@ -713,27 +466,18 @@ return 0
              die 1
              ;;
 
-      "-v" ) __VERBOSE_MODE=${__TRUE} ; shift
+      "-v" ) __VERBOSE_MODE=0 ; shift
              ;;
 
-      "-q" ) __QUIET_MODE=${__TRUE} ; shift
+      "-q" ) __QUIET_MODE=0 ; shift
              ;;
 
-      "-y" ) __USER_RESPONSE_IS="y"; shift 
+      "-i" ) ISO_IMAGE=$2; shift ; shift
              ;;
 
-      "-n" ) __USER_RESPONSE_IS="n"; shift 
-             ;;     
-
-      "-x" ) DISKS_TO_EXCLUDE="${DISKS_TO_EXCLUDE} $2"; shift; shift
+      "-o" ) OUTPUT_DIR=$2; shift ; shift
              ;;
 
-      "-N" ) WRITE_COUNT=$2 ; shift ; shift
-             ;;
-      
-      "-X" ) XSERVER_ADDRESS=$2; shift ; shift
-             ;;
-	     
       "--" ) shift; break 
              ;;
 	          	    
@@ -763,11 +507,11 @@ return 0
   LogInfo "Parameter before getopt processing are: \"${THIS_PARAMETER}\" "
   LogInfo "Parameter after getopt processing are: \"${PROCESSED_PARAMETER}\" "
 
-  if [ ${__MUST_BE_ROOT} -eq ${__TRUE} ] ; then  
+  if [ ${__MUST_BE_ROOT} -eq 0 ] ; then  
     UserIsRoot || die 498 "You must be root to execute this script" 
   fi
 
-  if [ ${__ONLY_ONCE} = ${__TRUE} ] ; then
+  if [ ${__ONLY_ONCE} = 0 ] ; then
     CreateLockFile
     if [ $? -ne 0 ] ; then
       cat <<EOF
@@ -787,121 +531,106 @@ EOF
     die 499
     fi
   fi
-  
-  GetProgramDirectory $0
-  __PROG_DIR=${PRGDIR}
 
   CreateTemporaryFiles
 
 #  ShowGlobalVariables
-#  echo \"${__PROG_DIR}\"
 
-# input file for format
-  FORMAT_INPUTFILE="/tmp/format.$$.input"
-  
-# logfile for format
-  FORMAT_LOGFILE="/tmp/format.$$:log"
-  
-# scripts for the xterms 
-  XTERM_SCRIPTS="/tmp/$__SCRIPTNAME.$$"
-  
-  
-# check the bootdisk parameter (if any)
-  for i in ${DISKS_TO_EXCLUDE} ; do
-    [ ! -c /dev/rdsk/${i} -a ! -c /dev/rdsk/${i}s0 ] && die 4 "The disk \"/dev/rdsk/${i}\" does not exist."
-  done   
+split_slice() {
 
-# create the input file for format
-  cat <<EOT >>${FORMAT_INPUTFILE}
-analyze 
-setup 
-yes 
-no 
-${WRITE_COUNT} 
-yes 
-no 
-yes 
-126 
-yes 
-no 
-yes 
-yes 
-write 
-quit 
-quit 
-EOT
- 
-  LogMsg "Building the list of existing disks ...." 
+# split_slice - copy a slice from an ISO image
+#
+# Parameter:
+# $1 - name of the iso image
+# $2 - name of the vtoc file
+# $3 - Offset of the start cylinder in the vtoc (decimal)
+# $4 - name of the file for the slice image
+#
+  typeset ISO_IMAGE=$1
+  typeset VTOC_FILE=$2
+  typeset START_CYLINDER_POS=$3 
+  typeset SLICE_FILE=$4  
 
-# create the egrep pattern for the disks to exclude
-  EGREP_PATTERN=""
-  for i in ${DISKS_TO_EXCLUDE} ;  do
-    if [ "${EGREP_PATTERN}"x = ""x ] ; then
-      EGREP_PATTERN="${i%%s*}"
-    else
-      EGREP_PATTERN="${EGREP_PATTERN}|${i%%s*}"
-    fi
-  done
-  
-# create a list of all existing disks
-  if [ "${EGREP_PATTERN}"x = ""x ] ; then
-    DEVICE_LIST=`echo| format | grep ". c" | awk '{ print $2 } ;' | sed s/s[0-9]//g `
-  else
-    DEVICE_LIST=`echo| format | grep ". c" | awk '{ print $2 } ;' | sed s/s[0-9]//g | egrep -v ${EGREP_PATTERN} `
+# calculate the start cylinder and the length of the slice
+  echo "  Calculating the slice infos ..."
+
+  set -- `od -D -j ${START_CYLINDER_POS} -N 8 < ${VTOC_FILE}`
+  START_CYLINDER=$2
+  NO_OF_BLOCKS=$3
+
+  if [ ${NO_OF_BLOCKS} = "0000000000" ] ; then
+    echo "Slice not found. Skipping."
+    return 0
   fi
 
+  START_BLOCK=`echo ${START_CYLINDER}*640 | bc`
 
-# check if we should and can use an xterm
-  if [ "${XSERVER_ADDRESS}"x != ""x ] ; then
-    LogMsg "Using xterm(s) on \"${XSERVER_ADDRESS}\" for the output"
-    set  -- `which xterm` 
-    XTERM_BIN="$1"
-    [ "${XTERM_BIN}"x = "no"x ] && XTERM_BIN="/usr/openwin/bin/xterm"
-    [ ! -f ${XTERM_BIN} ] && die 7 "Can not find the xterm binary!"
+# create the slice
+  echo "  Writing the slice (StartCylinder is ${START_BLOCK}, Length is ${NO_OF_BLOCKS}) ..."
+  dd if=${ISO_IMAGE} of=${SLICE_FILE} bs=512 skip=${START_BLOCK} count=${NO_OF_BLOCKS}
+  return $?
+}
+
+  echo $__SHORT_DESC
+  echo
+
+  if [ "$ISO_IMAGE"x = ""x ] ; then
+    ShowUsage
+    exit 0
   fi
 
-  
-  if [ "${DISKS_TO_EXCLUDE}"x != ""x ] ; then
-    LogMsg "Skipping the disks"
-    for i in ${DISKS_TO_EXCLUDE} ; do
-      LogMsg "    $i"
-    done
-  else
-    LogMsg "No devices to skip (no -x parameter)"
-  fi
-  
-  [ "${DEVICE_LIST}"x = ""x ] && die 0 "No disks to wipe found"
+  [ "${OUTPUT_DIR}"x = ""x ] && OUTPUT_DIR="."
 
-  LogMsg "Wiping the disks "
-  for i in ${DEVICE_LIST} ; do
-    LogMsg "    $i"
-  done
-  LogMsg " ${WRITE_COUNT} times."
-  AskUser "Start wiping these disks now? "
-  
-  if [ "${USER_INPUT}"x = "y"x ] ; then
-  
-# format every disk
-    for i in ${DEVICE_LIST}; do 
-      if [ "${XSERVER_ADDRESS}"x = ""x ] ; then
-        LogMsg "Wiping $i ..."
-        format -f ${FORMAT_INPUTFILE} -l ${FORMAT_LOGFILE}_${i} -d ${i}  >/dev/null 2>&1 & 
-      else
-        LogMsg "Starting an xterm to wipe the disk $i ..."
+  ISO_IMAGE_FILENAME=` basename ${ISO_IMAGE}` 
 
-	CUR_SCRIPT=${XTERM_SCRIPTS}.$i.sh
-	cp $0 ${CUR_SCRIPT}
+# create the vtoc
+  VTOC_FILE=${OUTPUT_DIR}/${ISO_IMAGE_FILENAME}.vtoc
+  echo "Creating the vtoc file in \"${VTOC_FILE}\" ..."
+  dd if=${ISO_IMAGE} of=${VTOC_FILE} bs=512 count=1
+  [ $? -ne 0 ] && die 4 "Can not create the vtoc file \"${VTOC_FILE}\" "
+    
+# slice 0
+  SLICE_FILE=${OUTPUT_DIR}/${ISO_IMAGE_FILENAME}.s0
+  echo "Creating slice 0 in \"${SLICE_FILE}\" ..."
+  split_slice ${ISO_IMAGE} ${VTOC_FILE} 444 ${SLICE_FILE}
 
-	echo "format -f ${FORMAT_INPUTFILE} -l ${FORMAT_LOGFILE}_${i} -d ${i}" >${CUR_SCRIPT}
-        ${XTERM_BIN} -d ${XSERVER_ADDRESS} -e ${CUR_SCRIPT} &
-      fi        
-    done 
+# slice 1
+  SLICE_FILE=${OUTPUT_DIR}/${ISO_IMAGE_FILENAME}.s1
+  echo "Creating slice 1 in \"${SLICE_FILE}\" ..."
+  split_slice ${ISO_IMAGE} ${VTOC_FILE} 452 ${SLICE_FILE}
 
-    die 0 
-  else
-    die 1 "Program aborted by the user"
-  fi
-  
+# slice 2
+  SLICE_FILE=${OUTPUT_DIR}/${ISO_IMAGE_FILENAME}.s2
+  echo "Creating slice 2 in \"${SLICE_FILE}\" ..."
+  split_slice ${ISO_IMAGE} ${VTOC_FILE} 460 ${SLICE_FILE}
+
+# slice 3
+  SLICE_FILE=${OUTPUT_DIR}/${ISO_IMAGE_FILENAME}.s3
+  echo "Creating slice 3 in \"${SLICE_FILE}\" ..."
+  split_slice ${ISO_IMAGE} ${VTOC_FILE} 468 ${SLICE_FILE}
+
+# slice 4
+  SLICE_FILE=${OUTPUT_DIR}/${ISO_IMAGE_FILENAME}.s4
+  echo "Creating slice 4 in \"${SLICE_FILE}\" ..."
+  split_slice ${ISO_IMAGE} ${VTOC_FILE} 476 ${SLICE_FILE}
+
+# slice 5
+  SLICE_FILE=${OUTPUT_DIR}/${ISO_IMAGE_FILENAME}.s5
+  echo "Creating slice 5 in \"${SLICE_FILE}\" ..."
+  split_slice ${ISO_IMAGE} ${VTOC_FILE} 484 ${SLICE_FILE}
+
+# slice 6
+  SLICE_FILE=${OUTPUT_DIR}/${ISO_IMAGE_FILENAME}.s6
+  echo "Creating slice 6 in \"${SLICE_FILE}\" ..."
+  split_slice ${ISO_IMAGE} ${VTOC_FILE} 492 ${SLICE_FILE}
+
+# slice 7
+  SLICE_FILE=${OUTPUT_DIR}/${ISO_IMAGE_FILENAME}.s7
+  echo "Creating slice 7 in \"${SLICE_FILE}\" ..."
+  split_slice ${ISO_IMAGE} ${VTOC_FILE} 500 ${SLICE_FILE}
+
+  echo " ... all done."
+
   die 0 
   
 exit

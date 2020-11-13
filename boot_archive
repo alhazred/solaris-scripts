@@ -1,0 +1,121 @@
+#!/usr/bin/ksh
+#
+# CDDL HEADER START
+#
+# The contents of this file are subject to the terms of the
+# Common Development and Distribution License, Version 1.0 only
+# (the "License").  You may not use this file except in compliance
+# with the License.
+#
+# You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
+# or http://www.opensolaris.org/os/licensing.
+# See the License for the specific language governing permissions
+# and limitations under the License.
+#
+# When distributing Covered Code, include this CDDL HEADER in each
+# file and include the License file at usr/src/OPENSOLARIS.LICENSE.
+# If applicable, add the following below this CDDL HEADER, with the
+# fields enclosed by brackets "[]" replaced with your own identifying
+# information: Portions Copyright [yyyy] [name of copyright owner]
+#
+# CDDL HEADER END
+#
+# Description:
+#
+#	Script to mount/umount the boot_archive
+#
+# Author:
+#	Bernd Schemmer (Bernd.Schemmer@gmx.de)
+#
+# History
+#	03.11.2008 /bs 
+#		inital release
+#
+# Usage:
+#
+#	boot_archive {umount}
+#
+# Default action without a parameter is to mount the boot_archive 
+#
+# Notes:
+#
+# Be aware, that the files in the boot_archive are all gezipped, e.g. to view the files use something like:
+#
+ # gzip -cd /tmp/boot_archive/etc/path_to_inst
+ #
+ # or
+ #
+ #  gzcat /tmp/boot_archive/etc/path_to_inst
+ #
+
+# this script can run on x86 and SPARC (for OpenSolaris or Solaris 10 Update 6 and later)
+#
+ARCH="$( uname -m )"
+
+case  ${ARCH} in
+	sun4u | sun4us | sun4v )
+		BOOT_ARCHIVE="/platform/${ARCH}/boot_archive"
+		;;
+		
+	i86pc | i86xpv )
+		[ "$( isainfo -b  )"x = "32"x ]  && ISADIR="/" || ISADIR="/amd64/"
+		BOOT_ARCHIVE="/platform/i86pc${ISADIR}boot_archive"
+		;;
+esac
+
+if [ ! -r "${BOOT_ARCHIVE}" ] ; then
+	echo "ERROR: The boot archive \"${BOOT_ARCHIVE}\" does not exist or is not readable!"
+	exit 5
+fi	
+
+echo "Using the boot archive \"${BOOT_ARCHIVE}\" ..."
+
+# check if there is already a lofi device for the boot_archive
+#
+LOFI_DEV="$( lofiadm "${BOOT_ARCHIVE}" 2>/dev/null )"
+
+MOUNT_POINT="/tmp/boot_archive"
+mkdir -p "${MOUNT_POINT}"
+if [ $? -ne 0 ] ; then
+	echo "ERROR: error creating the temporary mountpoint \"${MOUNT_POINT}\" "
+	exit 15
+fi
+
+case $1 in
+
+	-h | --help | "-?" )
+		echo "Usage: $( basename $0 ) {umount}"
+		exit 1
+		;;
+		
+	uninstall | umount )
+		if [ "${LOFI_DEV}"x != ""x ] ; then
+			umount ${LOFI_DEV} 2>/dev/null	
+			lofiadm -d ${LOFI_DEV}
+			echo "boot_archive umounted"
+		else
+			echo "The boot_archive is not mounted."
+		fi
+		;;
+        
+        *  )
+		if [ "${LOFI_DEV}"x = ""x ] ; then
+			LOFI_DEV=$( lofiadm -a "${BOOT_ARCHIVE}" )
+			[ $? -ne 0 ] && exit 5
+		fi      
+                
+		MOUNT_MSG="$( mount | grep " ${LOFI_DEV} "  )"
+		if [ $? != 0 ] ; then
+			FSTYP=$( fstyp ${LOFI_DEV} )
+			[ ${FSTYP} ] && MSG="readonly (${FSTYP})]" ||  MSG="readwrite (${FSTYP})]"
+			mount -F ${FSTYP} ${LOFI_DEV} ${MOUNT_POINT}
+			[ $? -ne 0 ] && exit 10
+			echo "boot_archive mounted ${MSG}: "
+			mount | grep ${MOUNT_POINT}
+		else
+			echo "boot_archive already mounted:"
+			echo "${MOUNT_MSG}"
+		fi
+		;;
+esac
+

@@ -1,0 +1,1721 @@
+#/bin/bash
+
+if [[ $0 == *.include ]] ; then
+  CUR_FILENAME="${0##*/}"
+  echo "ERROR: $0 is an include file for ${CUR_FILENAME%.*}.sh"
+  exit 5
+fi
+
+# disable the parameter "all"
+#
+DISABLE_THE_PARAMETER_ALL=${__TRUE}
+
+
+# OS executables
+#
+SERVICE="/usr/sbin/service"
+RPM="/usr/bin/rpm"
+
+# Infoscale executables
+#
+UUIDCONFIG="/opt/VRTSvcs/bin/uuidconfig.pl"
+
+VXDCTL="/usr/sbin/vxdctl"
+VXIOD="/usr/sbin/vxiod"
+VXCONFIGD="/usr/sbin/vxconfigd"
+VXKEYLESS="/opt/VRTS/bin/vxkeyless"
+VXLICREP="/usr/sbin/vxlicrep"
+VXLICINST="/usr/sbin/vxlicinst"
+
+HASTATUS="/opt/VRTSvcs/bin/hastatus"
+LLTPING="/opt/VRTSllt/lltping"
+LLTCONFIG="/usr/sbin/lltconfig"
+GABCONFIG="/sbin/gabconfig"
+
+# Infoscale config files
+#
+LLTHOSTS="/etc/llthosts"
+LLTTAB="/etc/llttab"
+GABTAB="/etc/gabtab"
+
+VXVM_INSTALL_DB_FILE="/etc/vx/reconfig.d/state.d/install-db"
+
+UUID_DIRECTORY="/etc/vx/.uuids"
+UUID_FILE="${UUID_DIRECTORY}/clusuuid"
+
+VCS_DIR="/opt/VRTSvcs"
+VCS_BIN_DIR="${VCS_DIR}/bin/"
+
+
+LICENSE_KEYS_FOUND_IN_RCM=${__FALSE}
+LICENSEKEY=""
+LICENSEKEY_FS=""
+LICENSEKEY_VM=""
+LICENSEKEY_VCS=""
+INFOSCALE_TEST_LICENSE_TYPE=""
+
+LIST_OF_LICENSES_FOUND_IN_RCM=""
+
+
+# ----------------------------------------------------------------------
+# task_read_infoscale_license_from_rcm
+#
+# function: task_read_infoscale_license_from_rcm
+#
+# usage: task_read_infoscale_license_from_rcm [hostid] [rcm_service] [rcm_function] # def: RCM_HOSTID RCM_VERSION RCM_FUNCTION
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_read_infoscale_license_from_rcm {
+  typeset __FUNCTION="task_cdread_license_from_rcm"
+  typeset TASK_USAGE="${__FUNCTION} [hostid] # def: read license for this host"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  typeset CUR_KEY=""
+  typeset CUR_VALUE=""
+  
+# save the RCM variables
+#
+  typeset ORIGINAL_HOSTID="${RCM_HOSTID}"
+  typeset ORIGINAL_RCM_SERVICE="${RCM_SERVICE}"
+  typeset ORIGINAL_RCM_FUNCTION="${RCM_FUNCTION}"
+
+  if [ ${THISRC} = ${__TRUE} ] ; then
+
+    RCM_SERVICE="${2:-veritas}"
+    RCM_FUNCTION="${3:-SFHA}"
+    RCM_HOSTID="${1:-${ORIGINAL_HOSTID}}"
+
+    check_rcm_values        
+    if [ $? -ne 0 ] ; then
+      LogError "Error initiating the RCM support"
+      THISRC=${__FALSE}
+    fi
+  fi
+
+  if [ ${THISRC} = ${__TRUE} ] ; then
+    LogMsg "Reading the license for the host \"${RCM_HOSTID}\" from the RCM ..."
+
+    Read_APPL_PARAMS_entries
+    if [ "${FOUND_APPL_PARAM_ENTRY_KEYS}"x = ""x ] ; then
+      LogError "No RCM configuration found"
+      THISRC=${__FALSE}
+    fi
+  fi
+
+#U# ----------------------------------------------------------------------
+#U#
+#U# Supported RCM APPL_PARAMS entries
+#U#
+#U#  NAME                             VALUE
+#U# ----------------------------------------------------------------------
+#U#  VAR:<name>                       value for the variable <name>
+#U#  licensekey                       InfoScale License SFHA
+#U#  licensekey_fs                    InfoScale License for Filesystem
+#U#  licensekey_vm                    InfoScale License for Volume Manager
+#U#  licensekey_vcs                   InfoScale License for Veritas Cluster
+#U#  demo_license                     type of the demo license
+#U#
+#U#  
+
+
+
+  if [ ${THISRC} = ${__TRUE} ] ; then
+
+    LogMsg "Processing the configuration found in the RCM ..."
+
+    LICENSE_KEYS_FOUND_IN_RCM=${__FALSE}
+    i=0
+    while [ $i -lt RCM_APPL_PARAMS_KEY[0] ] ; do
+      (( i = i + 1 ))
+
+      CUR_KEY="${RCM_APPL_PARAMS_KEY[$i]}"
+      CUR_VALUE="${RCM_APPL_PARAMS_VAL[$i]}"
+
+      LogMsg "  Processing the entry \"${CUR_KEY} = ${CUR_VALUE}\" ..."
+
+      case ${CUR_KEY} in
+
+        "licensekey" )
+          LogMsg "APPL_PARAMS entry \"${CUR_KEY}\" found: ${CUR_VALUE}"
+          LICENSEKEY="${CUR_VALUE}"
+          LICENSE_KEYS_FOUND_IN_RCM=${__TRUE}
+          LIST_OF_LICENSES_FOUND_IN_RCM="${LIST_OF_LICENSES_FOUND_IN_RCM} ${CUR_VALUE}"
+          ;;
+
+        "licensekey_fs" )
+          LogMsg "APPL_PARAMS entry \"${CUR_KEY}\" found: ${CUR_VALUE}"
+          LICENSEKEY_FS="${CUR_VALUE}"
+          LICENSE_KEYS_FOUND_IN_RCM=${__TRUE}
+          LIST_OF_LICENSES_FOUND_IN_RCM="${LIST_OF_LICENSES_FOUND_IN_RCM} ${CUR_VALUE}"
+          ;;
+
+        "licensekey_vm" )
+          LogMsg "APPL_PARAMS entry \"${CUR_KEY}\" found: ${CUR_VALUE}"
+          LICENSEKEY_VM="${CUR_VALUE}"
+          LICENSE_KEYS_FOUND_IN_RCM=${__TRUE}
+          LIST_OF_LICENSES_FOUND_IN_RCM="${LIST_OF_LICENSES_FOUND_IN_RCM} ${CUR_VALUE}"
+          ;;
+
+        "licensekey_vcs" )
+          LogMsg "APPL_PARAMS entry \"${CUR_KEY}\" found: ${CUR_VALUE}"
+          LICENSEKEY_VCS="${CUR_VALUE}"
+          LICENSE_KEYS_FOUND_IN_RCM=${__TRUE}
+          LIST_OF_LICENSES_FOUND_IN_RCM="${LIST_OF_LICENSES_FOUND_IN_RCM} ${CUR_VALUE}"
+          ;;
+
+        "demo_license" )
+          LogMsg "APPL_PARAMS entry \"${CUR_KEY}\" found: ${CUR_VALUE}"
+          INFOSCALE_TEST_LICENSE_TYPE="${CUR_VALUE}"
+          ;;
+
+        "#"* )
+          LogMsg "Comment entry found: \"${CUR_KEY}\" = \"${CUR_VALUE}\" and ignored"
+          ;;
+
+        "VAR:"* )
+          LogMsg "  --- Variable assignment found in the RCM:"
+          VAR_NAME="${CUR_KEY#*:}"
+          LogMsg "  --- Current value of ${VAR_NAME} is: \"$( eval echo \$${VAR_NAME} )\" "
+          set -x
+          eval ${VAR_NAME}="${CUR_VALUE}"
+          set +x
+          LogMsg "  --- Current value of ${VAR_NAME} is now: \"$( eval echo \$${VAR_NAME} )\" "
+          ;;
+
+        * )
+          LogWarning "Unknown RCM APPL_PARAMS entry found: \"${CUR_KEY}\" = \"${CUR_VALUE}\" "
+          ;;
+      esac
+  
+    done
+  fi
+
+  if [ ${LICENSE_KEYS_FOUND_IN_RCM} = ${__TRUE} ]; then
+    THISRC=${__TRUE}
+    LogMsg "-"
+      
+    LogMsg "License keys found in the RCM are:"
+    if [ "${LICENSEKEY}"x != ""x ] ; then
+      LogMsg "Infoscale license for \"all\" found : \"${LICENSEKEY}\" "
+    fi
+
+    if [ "${LICENSEKEY_FS}"x != ""x ] ; then
+      LogMsg "Infoscale license for \"VxFS\" found : \"${LICENSEKEY_FS}\" "
+    fi
+
+    if [ "${LICENSEKEY_VM}"x != ""x ] ; then
+      LogMsg "Infoscale license for \"VxVM\" found : \"${LICENSEKEY_VM}\" "
+    fi
+
+    if [ "${LICENSEKEY_VCS}"x != ""x ] ; then
+      LogMsg "Infoscale license for \"VCS\" found : \"${LICENSEKEY_VCS}\" "
+    fi
+  else
+    LogError "No Infoscale licenses found in the RCM"
+    THISRC=${__FALSE}
+  fi
+  
+# restore the RCM variables
+#  
+  RCM_HOSTID="${ORIGINAL_HOSTID}"
+  RCM_SERVICE="${ORIGINAL_RCM_SERVICE}"
+  RCM_FUNCTION="${ORIGINAL_RCM_FUNCTION}"
+     
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_install_infoscale_license
+#
+# function: task_install_infoscale_license
+#
+# usage: task_install_infoscale_license licensekey
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_install_infoscale_license {
+  typeset __FUNCTION="task_install_infoscale_license"
+  typeset TASK_USAGE="${__FUNCTION} [licensekey# [...]]  # def: ask user; use 'rcm' to read the license from the RCM "
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  typeset NEW_LICENSE="$1"
+  typeset CUR_LICENSE=""
+  
+  if [ ${THISRC} = ${__TRUE} ] ; then
+    if [ ! -x "${VXLICINST}" ] ; then
+      LogError "${VXLICINST} not found or not executable"
+      THISRC=${__FALSE}
+    fi
+  fi
+  
+  if [ ${THISRC} = ${__TRUE} ] ; then
+    if [ "${NEW_LICENSE}"x = "rcm"x -o  "${NEW_LICENSE}"x = "RCM"x ] ; then
+      LogMsg "Reading the Infoscale license from the RCM ..."
+      task_read_infoscale_license_from_rcm
+      if [ "${LIST_OF_LICENSES_FOUND_IN_RCM}"x = ""x ] ; then
+        LogError "No Infoscale licenses found in the RCM"
+        THISRC=${__FALSE}
+      else
+        NEW_LICENSE="${LIST_OF_LICENSES_FOUND_IN_RCM}"
+      fi
+    fi
+  fi
+
+  if [ ${THISRC} = ${__TRUE} ] ; then
+    for CUR_LICENSE in ${NEW_LICENSE} ; do
+      LogMsg "Installing the Infoscale license \"${CUR_LICENSE}\" ..."
+      CUR_OUTPUT="$( set -x ; ${VXLICINST} -q -k "${CUR_LICENSE}" 2>$1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+      LogMsg "-"
+      if [ ${TEMPRC} -ne 0 ] ; then
+        LogError "Error installing the license \"${CUR_LICENSE}\" (RC=${TEMPRC})"
+        THISRC=${__FALSE}
+      fi
+    done
+  fi
+
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_add_opt_VRTSVCS_bin_to_path_variable
+#
+# function: add the directory /opt/VRTSvcs/bin to the PATH variable
+#
+# usage: task_add_opt_VRTSVCS_bin_to_path_variable
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_add_opt_VRTSVCS_bin_to_path_variable {
+  typeset __FUNCTION="task_add_opt_VRTSVCS_bin_to_path_variable"
+  typeset TASK_USAGE="${__FUNCTION} "
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+  typeset NEW_PATH="${VCS_BIN_DIR}"
+  
+  typeset ETC_PROFILE="/etc/profile"
+  
+  LogMsg "Checking if \"${NEW_PATH}\" is in the PATH variable in ${ETC_PROFILE} .."
+  
+  ( . "${ETC_PROFILE}" ; echo ":${PATH}:" | grep ":${NEW_PATH}:" >/dev/null )
+  if [ $? -eq 0 ] ; then
+    LogMsg " \"${NEW_PATH}\" is already in the PATH variable in ${ETC_PROFILE} "
+  else
+    LogMsg "Adding \"${NEW_PATH}\" to the PATH variable in ${ETC_PROFILE} ..."
+    
+    CUR_OUTPUT="$( exec 2>&1 ;  set -x ; cp "${ETC_PROFILE}" "${ETC_PROFILE}.$$" && echo "PATH=\$PATH:${NEW_PATH} ; export PATH ">>"${ETC_PROFILE}" )"
+    [ $? -ne 0 ]  && THISRC=${__FALSE}
+  fi
+
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_create_llthosts
+#
+# function: create the llthosts
+#
+# usage: task_create_llthosts [clusternode0 [clusternode1]]
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_create_llthosts {
+  typeset __FUNCTION="task_create_llthosts"
+  typeset TASK_USAGE="${__FUNCTION} [clusternode0 [clusternode1]] # def: ask user"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+  
+  typeset CLUSTER_NODE0="$1"
+  typeset CLUSTER_NODE1="$2"
+  
+  while [ "${CLUSTER_NODE0}"x = ""x ] ; do
+    AskUser "Please enter the name of the cluster node 0 (\"exit\" to abort):"
+    if [ "${USER_INPUT}"x = "exit"x ] ; then
+      break
+    elif [ "${USER_INPUT}"x != ""x ] ; then
+      CLUSTER_NODE0="${USER_INPUT}"
+    fi
+  done
+
+  while [  "${CLUSTER_NODE0}"x != ""x  -a "${CLUSTER_NODE1}"x = ""x ] ; do
+    AskUser "Please enter the name of the cluster node 1 (\"exit\" to abort):"
+    if [ "${USER_INPUT}"x = "exit"x ] ; then
+      break
+    elif [ "${USER_INPUT}"x != ""x ] ; then
+      CLUSTER_NODE1="${USER_INPUT}"
+    fi
+  done
+
+  if [ "${CLUSTER_NODE0}"x != ""x  -a "${CLUSTER_NODE1}"x != ""x ] ; then
+    CUR_OUTPUT="0 ${CLUSTER_NODE0}
+1 ${CLUSTER_NODE1}
+"
+  
+    LogMsg "# The contents for the file \"${LLTHOSTS}\" are:"
+    LogMsg "-"  "${CUR_OUTPUT}"
+
+    if [ -r "${LLTHOSTS}" ] ; then
+      LogError "The file \"${LLTHOSTS}\" already exists with these contents:"
+      LogMsg "-" "$( cat "${LLTHOSTS}" )"
+      THISRC=${__FALSE}
+    else
+      LogMsg "Creating the file \"${LLTHOSTS}\" ..."
+      echo "${CUR_OUTPUT}" >"${LLTHOSTS}" || THISRC=${__FALSE}
+    fi
+  else
+    LogMsg "Creating the file \"${LLTHOSTS}\" aborted by the user"
+    THISRC=${__FALSE}
+  fi
+
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_create_llttab
+#
+# function: create the llttab
+#
+# usage: task_create_llttab [clusternode clusterno icadapter1 icadapter2 lowpriadapter]
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_create_llttab {
+  typeset __FUNCTION="task_create_llttab"
+  typeset TASK_USAGE="${__FUNCTION} clusternode clusterno icadapter1 icadapter2 lowpriadapter # def: ask user"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+  
+  typeset CLUSTERNODE="$1"
+  typeset CLUSTERNO="$2"
+  typeset ICADAPTER1="$3"
+  typeset ICADAPTER2="$4"
+  typeset LOWPRIADPATER="$5"
+
+  while [ ${THISRC} = ${__TRUE} -a "${CLUSTERNODE}"x = ""x ] ; do
+    AskUser "Please enter the name of the cluster (\"exit\" to abort):"
+    if [ "${USER_INPUT}"x = "exit"x ] ; then
+      THISRC=${__FALSE}
+      break
+    elif [ "${USER_INPUT}"x != ""x ] ; then
+      CLUSTERNODE="${USER_INPUT}"
+    fi
+  done
+
+  while [ ${THISRC} = ${__TRUE} -a "${CLUSTERNO}"x = ""x ] ; do
+    AskUser "Please enter the cluster number (\"exit\" to abort):"
+    if [ "${USER_INPUT}"x = "exit"x ] ; then
+      THISRC=${__FALSE}
+      break
+    elif [ "${USER_INPUT}"x != ""x ] ; then
+      CLUSTERNO="${USER_INPUT}"
+    fi
+  done
+
+  while [ ${THISRC} = ${__TRUE} -a "${ICADAPTER1}"x = ""x ] ; do
+    AskUser "Please enter the network adapter used for the interconnect1 (\"exit\" to abort, \"list\" to list the existing adapter):"
+    if [ "${USER_INPUT}"x = "list"x ] ; then
+      LogMsg "Known network adapter are:"
+      CUR_OUTPUT="$( ip link list )"
+      LogMsg "-" "${CUR_OUTPUT}"
+    elif [ "${USER_INPUT}"x = "exit"x ] ; then
+      THISRC=${__FALSE}
+      break
+    elif [ "${USER_INPUT}"x != ""x ] ; then
+      ip link list "${USER_INPUT}" 2>/dev/null 1>/dev/null
+      if [ $? -ne 0 ] ; then
+        LogError "The adapter \"${USER_INPUT}\" does not exist"
+      else
+        ICADAPTER1="${USER_INPUT}"
+      fi
+    fi
+  done
+  
+  while [ ${THISRC} = ${__TRUE} -a "${ICADAPTER2}"x = ""x ] ; do
+    AskUser "Please enter the network adapter used for the interconnect2 (\"exit\" to abort, \"list\" to list the existing adapter):"
+    if [ "${USER_INPUT}"x = "list"x ] ; then
+      LogMsg "Known network adapter are:"
+      CUR_OUTPUT="$( ip link list )"
+      LogMsg "-" "${CUR_OUTPUT}"
+    elif [ "${USER_INPUT}"x = "exit"x ] ; then
+      THISRC=${__FALSE}
+      break
+    elif [ "${USER_INPUT}"x != ""x ] ; then
+      ip link list "${USER_INPUT}" 2>/dev/null 1>/dev/null
+      if [ $? -ne 0 ] ; then
+        LogError "The adapter \"${USER_INPUT}\" does not exist"
+      else
+        ICADAPTER2="${USER_INPUT}"
+      fi
+    fi
+  done
+  
+  while [ ${THISRC} = ${__TRUE} -a "${LOWPRIADPATER}"x = ""x ] ; do
+    AskUser "Please enter the network adapter used for the lowpri interconnect (\"exit\" to abort, \"list\" to list the existing adapter):"
+    if [ "${USER_INPUT}"x = "list"x ] ; then
+      LogMsg "Known network adapter are:"
+      CUR_OUTPUT="$( ip link list )"
+      LogMsg "-" "${CUR_OUTPUT}"
+    elif [ "${USER_INPUT}"x = "exit"x ] ; then
+      THISRC=${__FALSE}
+      break
+    elif [ "${USER_INPUT}"x != ""x ] ; then
+      ip link list "${USER_INPUT}" 2>/dev/null 1>/dev/null
+      if [ $? -ne 0 ] ; then
+        LogError "The adapter \"${USER_INPUT}\" does not exist"
+      else
+        LOWPRIADPATER="${USER_INPUT}"
+      fi
+    fi
+  done  
+ 
+  CUR_OUTPUT="
+set-node ${CLUSTERNODE}
+set-cluster ${CLUSTERNO}
+link ${ICADAPTER1} eth-$( ip link list ${ICADAPTER1} | grep ether | awk '{ print $2 }' ) - ether - -
+link ${ICADAPTER2} eth-$( ip link list ${ICADAPTER2} | grep ether | awk '{ print $2 }' ) - ether - -
+link ${LOWPRIADPATER} eth-$( ip link list ${LOWPRIADPATER} | grep ether | awk '{ print $2 }' ) - ether - -
+include  0-1
+"  
+
+  LogMsg "# The contents for the file \"${LLTTAB}\" are:"
+  LogMsg "-"  "${CUR_OUTPUT}"
+
+  if [ -r "${LLTTAB}" ] ; then
+    LogError "The file \"${LLTTAB}\" already exists with these contents:"
+    LogMsg "-" "$( cat "${LLTTAB}" )"
+    THISRC=${__FALSE}    
+  else
+    LogMsg "Creating the file \"${LLTTAB}\" ..."
+    echo "${CUR_OUTPUT}" >"${LLTTAB}" || THISRC=${__FALSE}
+  fi
+      
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_check_gab_config_files
+#
+# function: check the gab config files
+#
+# usage: task_check_gab_config_files
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_check_gab_config_files {
+  typeset __FUNCTION="task_check_gab_config_files"
+  typeset TASK_USAGE="${__FUNCTION} "
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+  typeset TEMPVAR=""
+  
+  typeset GABTAB_CONTENT=""
+  
+  LogMsg "Checking the gab config files ..."
+
+  LogMsg "-"
+  LogMsg "Checking the file \"${LLTHOSTS}\" ..."
+  if [ ! -r "${GABTAB}" ] ; then
+    LogError "The file \"${GABTAB}\" does not exist"
+    THISRC=${__FALSE}
+  else
+    LogMsg "The file \"${GABTAB}\" exists:"
+    LogMsg "-" "$( ls -l "${GABTAB}" )"
+    LogMsg "-" 
+    LogMsg "File Contents are:"
+    GABTAB_CONTENT="$( cat "${GABTAB}" )"
+    LogMsg "-" "${GABTAB_CONTENT}"
+    LogMsg "-"
+    echo "${GABTAB_CONTENT}" grep "^${GABCONFIG} " | grep -- "-n ${CLUSTER_NODES}" >/dev/null
+    if [ $? -ne 0 ] ; then
+      LogError "The file \"${GABTAB}\" looks strange - please check the file contents manually"
+      THISRC=${__FALSE}
+    else
+      LogMsg "The file \"${GABTAB}\" looks okay"
+    fi
+  fi
+  
+  return ${THISRC}
+}
+ 
+
+# ----------------------------------------------------------------------
+# task_check_llt_config_files
+#
+# function: check the llt config files
+#
+# usage: task_check_llt_config_files
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_check_llt_config_files {
+  typeset __FUNCTION="task_check_llt_config_files"
+  typeset TASK_USAGE="${__FUNCTION} "
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+  typeset TEMPVAR=""
+  
+  typeset LLTTAB_CONTENT=""
+  typeset LLTHOSTS_CONTENT=""
+  typeset CUR_MAC_ADDRESS=""
+  
+  LogMsg "Checking the llt config files ..."
+
+  LogMsg "-"
+  LogMsg "Checking the file \"${LLTHOSTS}\" ..."
+  if [ ! -r "${LLTHOSTS}" ] ; then
+    LogError "The file \"${LLTHOSTS}\" does not exist"
+    THISRC=${__FALSE}
+  else
+    LogMsg "The file \"${LLTHOSTS}\" exists:"
+    LogMsg "-" "$( ls -l "${LLTHOSTS}" )"
+    LogMsg "-" 
+    LogMsg "File Contents are:"
+    LLTHOSTS_CONTENT="$( cat "${LLTHOSTS}" )"
+    LogMsg "-" "${LLTHOSTS_CONTENT}"
+    LogMsg "-"
+    
+    echo "${LLTHOSTS_CONTENT}" | grep "${CUR_SHORT_HOST}" >/dev/null
+    if [ $? -ne 0 ] ; then
+      LogWarning "${CUR_SHORT_HOST} not found in \"${LLTHOSTS}\" "
+    fi
+    echo "${LLTHOSTS_CONTENT}" | grep "^0 " >/dev/null
+    if [ $? -ne 0 ] ; then
+      LogWarning "No definition for cluster node 0 found in \"${LLTHOSTS}\" "
+    fi
+    echo "${LLTHOSTS_CONTENT}" | grep "^1 " >/dev/null
+    if [ $? -ne 0 ] ; then
+      LogWarning "No definition for cluster node 1 found in \"${LLTHOSTS}\" "
+    fi
+
+    if [ ${THISRC} = ${__TRUE} ] ; then
+      LogMsg "The file \"${LLTHOSTS}\" looks okay"
+    else      
+      LogError "The file \"${LLTHOSTS}\" looks suspicious"
+    fi
+  fi
+
+  LogMsg "-"
+  LogMsg "Checking the file \"${LLTTAB}\" ..."
+  if [ ! -r "${LLTTAB}" ] ; then
+    LogError "The file \"${LLTTAB}\" does not exist"
+    THISRC=${__FALSE}
+  else
+    LogMsg "The file \"${LLTTAB}\" exists:"
+    LogMsg "-" "$( ls -l "${LLTTAB}" )"
+    LogMsg "-" 
+    LogMsg "File Contents are:"
+    LLTTAB_CONTENT="$( cat "${LLTTAB}" )"
+    LogMsg "-" "${LLTTAB_CONTENT}"
+    LogMsg "-"
+
+    TEMPVAR="$( echo "${LLTTAB_CONTENT}" | grep ^set-cluster | awk '{print $2 };' )"
+    if [ "${TEMPVAR}"x = ""x ] ; then
+      LogError "The \"set-cluster\" statement is missing in the file \"${LLTTAB}\" "
+      THISRC=${__FALSE}
+    else
+      LogMsg "The \"set-cluster\" statement is in the file \"${LLTTAB}\"; the value is \"${TEMPVAR}\" "
+    fi
+
+    TEMPVAR="$( echo "${LLTTAB_CONTENT}" | grep ^set-node | awk '{print $2 };' )"
+    if [ "${TEMPVAR}"x = ""x ] ; then
+      LogError "The \"set-node\" statement is missing in the file \"${LLTTAB}\" "
+      THISRC=${__FALSE}
+    else
+      echo "${LLTHOSTS_CONTENT}" | grep " ${TEMPVAR}$" >/dev/null
+      if [ $? -eq 0 ] ; then
+        LogMsg "OK, the nodename \"${TEMPVAR}\" from the file \"${LLTTAB}\" is configured in the file \"${LLTHOSTS}\" "
+      else
+        LogError "The nodename \"${TEMPVAR}\" from the file \"${LLTTAB}\" is not configured in the file \"${LLTHOSTS}\" "
+        THISRC=${__FALSE}
+      fi
+    fi
+      
+    for CUR_MAC_ADDRESS in $( echo "${LLTTAB_CONTENT}" | grep "eth-" | awk '{print $3};' | sed "s/eth-//g" ) ; do
+      ip link list | grep "${CUR_MAC_ADDRESS}" >/dev/null
+      if [ $? -ne 0 ] ; then
+        LogError "The mac address \"${CUR_MAC_ADDRESS}\" used in the file \"${LLTTAB}\" does not belong to an existing network adapter"
+        THISRC=${__FALSE}
+      else
+        LogMsg "The mac address \"${CUR_MAC_ADDRESS}\" used in the file \"${LLTTAB}\" belongs to an existing network adapter"
+      fi
+    done
+
+    if [ ${THISRC} = ${__TRUE} ] ; then
+      LogMsg "The file \"${LLTHOSTS}\" looks okay"
+    else      
+      LogError "The file \"${LLTHOSTS}\" looks suspicious"
+    fi
+
+  fi
+  
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_start_gab
+#
+# function: start the gab daemon
+#
+# usage: task_start_gab
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_start_gab {                  
+  typeset __FUNCTION="task_start_gab"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  typeset CUR_SERVICE="gab"
+  typeset CUR_SERVICE_NAME="gab daemon"
+  
+  LogMsg "Starting the ${CUR_SERVICE_NAME} ..."
+
+  if [ ! -x "${SERVICE}" ] ; then
+    LogError "${SERVICE} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    LogMsg "Checking if the ${CUR_SERVICE_NAME} is already running ..."
+    CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} status 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+    if [ ${TEMPRC} = 0 ] ; then
+      LogMsg "The ${CUR_SERVICE_NAME} is already running"
+    else
+      LogMsg "The ${CUR_SERVICE_NAME} is not running; now starting the ${CUR_SERVICE_NAME} ..."
+      CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} start 2>&1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+
+      LogMsg "Checking the status of the ${CUR_SERVICE_NAME} ..."
+      CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} status 2>&1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+
+      if [ ${TEMPRC} = 0 ] ; then
+        LogMsg "The ${CUR_SERVICE_NAME} is now running"
+      else
+        LogError "Error starting the ${CUR_SERVICE_NAME}"
+        THISRC=${__FALSE}
+      fi
+    fi
+  fi
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_stop_gab
+#
+# function: stop the gab daemon
+#
+# usage: task_stop_gab
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_stop_gab {                  
+  typeset __FUNCTION="task_stop_gab"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  typeset CUR_SERVICE="gab"
+  typeset CUR_SERVICE_NAME="gab daemon"
+  
+  LogMsg "Stopping the ${CUR_SERVICE_NAME} ..."
+
+  if [ ! -x "${SERVICE}" ] ; then
+    LogError "${SERVICE} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    LogMsg "Checking if the ${CUR_SERVICE_NAME} is already stopped ..."
+    CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} status 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+    if [ ${TEMPRC} != 0 ] ; then
+      LogMsg "The ${CUR_SERVICE_NAME} is not running"
+    else
+      LogMsg "The ${CUR_SERVICE_NAME} is running; now stopping the ${CUR_SERVICE_NAME} ..."
+      CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} stop 2>&1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+
+      LogMsg "Checking the status of the ${CUR_SERVICE_NAME} ..."
+      CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} status 2>&1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+
+      if [ ${TEMPRC} != 0 ] ; then
+        LogMsg "The ${CUR_SERVICE_NAME} is now stopped"
+      else
+        LogError "Error stopping the ${CUR_SERVICE_NAME}"
+        THISRC=${__FALSE}
+      fi
+    fi
+  fi
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_start_llt
+#
+# function: start the llt daemon
+#
+# usage: task_start_llt
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_start_llt {                  
+  typeset __FUNCTION="task_start_llt"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  typeset CUR_SERVICE="llt"
+  typeset CUR_SERVICE_NAME="llt daemon"
+  
+  LogMsg "Starting the ${CUR_SERVICE_NAME} ..."
+
+  if [ ! -x "${SERVICE}" ] ; then
+    LogError "${SERVICE} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    LogMsg "Checking if the ${CUR_SERVICE_NAME} is already running ..."
+    CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} status 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+    if [ ${TEMPRC} = 0 ] ; then
+      LogMsg "The ${CUR_SERVICE_NAME} is already running"
+    else
+      LogMsg "The ${CUR_SERVICE_NAME} is not running; now starting the ${CUR_SERVICE_NAME} ..."
+      CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} start 2>&1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+
+      LogMsg "Checking the status of the ${CUR_SERVICE_NAME} ..."
+      CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} status 2>&1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+
+      if [ ${TEMPRC} = 0 ] ; then
+        LogMsg "The ${CUR_SERVICE_NAME} is now running"
+      else
+        LogError "Error starting the ${CUR_SERVICE_NAME}"
+        THISRC=${__FALSE}
+      fi
+    fi
+  fi
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_stop_llt
+#
+# function: stop the llt daemon
+#
+# usage: task_stop_llt
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_stop_llt {                  
+  typeset __FUNCTION="task_stop_llt"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  typeset CUR_SERVICE="llt"
+  typeset CUR_SERVICE_NAME="llt daemon"
+  
+  LogMsg "Stopping the ${CUR_SERVICE_NAME} ..."
+
+  if [ ! -x "${SERVICE}" ] ; then
+    LogError "${SERVICE} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    LogMsg "Checking if the ${CUR_SERVICE_NAME} is already stopped ..."
+    CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} status 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+    if [ ${TEMPRC} != 0 ] ; then
+      LogMsg "The ${CUR_SERVICE_NAME} is not running"
+    else
+      LogMsg "The ${CUR_SERVICE_NAME} is running; now stopping the ${CUR_SERVICE_NAME} ..."
+      CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} stop 2>&1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+
+      LogMsg "Checking the status of the ${CUR_SERVICE_NAME} ..."
+      CUR_OUTPUT="$( set -x ; ${SERVICE} ${CUR_SERVICE} status 2>&1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+
+      if [ ${TEMPRC} != 0 ] ; then
+        LogMsg "The ${CUR_SERVICE_NAME} is now stopped"
+      else
+        LogError "Error stopping the ${CUR_SERVICE_NAME}"
+        THISRC=${__FALSE}
+      fi
+    fi
+  fi
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_view_llt_config
+#
+# function: view the llt config
+#
+# usage: task_view_llt_config
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_view_llt_config {
+  typeset __FUNCTION="task_view_llt_config"
+  typeset TASK_USAGE="${__FUNCTION} "
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  LogMsg "Retrieving the llt status ..."
+  if [ ! -x "${LLTCONFIG}" ] ; then
+    LogError "${LLTCONFIG} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    CUR_OUTPUT="$( ${LLTCONFIG} -a list 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+    if [ ${TEMPRC} -ne 0 ] ; then
+      LogError "Error retrieving the llt status"
+      THISRC=${__FALSE}
+    fi
+  fi
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_list_installed_vrts_packages
+#
+# function: list the installed VRTS packages
+#
+# usage: task_list_installed_vrts_packages
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_list_installed_vrts_packages {
+  typeset __FUNCTION="task_list_installed_vrts_packages"
+  typeset TASK_USAGE="${__FUNCTION} "
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  LogMsg "Retrieving the list of installed rpm packages ..."
+  if [ ! -x "${RPM}" ] ; then
+    LogError "${RPM} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    CUR_OUTPUT="$( rpm -q -a | grep -i vrts 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+    if [ ${TEMPRC} -ne 0 ] ; then
+      LogError "Error retrieving the list of installed VRTS rpms"
+      THISRC=${__FALSE}
+    fi
+  fi
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_start_llt_test_server
+#
+# function: start a llt test server
+#
+# usage: task_start_llt_test_server
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_start_llt_test_server {
+  typeset __FUNCTION="task_start_llt_test_server"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+  typeset OLD_BREAK_ALLOWED=""
+  
+  LogMsg "Starting a test llt server .."
+  if [ ! -x "${LLTPING}" ] ; then
+    LogError "${LLTPING} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    LogMsg "Use <ctrl-c> to stop the llt test server .."
+    OLD_BREAK_ALLOWED="${BREAK_ALLOWED}"
+    BREAK_ALLOWED=${__FALSE}
+
+    ( set -x ; ${LLTPING} -s -T  )
+
+    BREAK_ALLOWED="${OLD_BREAK_ALLOWED}"
+  fi
+  
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_start_llt_test_client
+#
+# function: start a llt test client
+#
+# usage: task_start_llt_test_client
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_start_llt_test_client {
+  typeset __FUNCTION="task_start_llt_test_client"
+  typeset TASK_USAGE="${__FUNCTION} [servernode] # def: check llthosts"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+ 
+  typeset LLTSERVER_ID="$1"
+  
+  if [ "${LLTSERVER_ID}"x = ""x ] ; then
+    if [ ! -r "${LLTHOSTS}" ] ; then
+      LogMsg "The file \"${LLTHOSTS}\" does not exist -- can not retrieve the node id of the llt server"
+      THISRC=${__FALSE}
+    else
+      LLTSERVER_ID="$( grep -v "${CUR_SHORT_HOST}" "${LLTHOSTS}" | cut -f1 -d " " )"
+    fi
+  fi
+
+  if [ "${LLTSERVER_ID}"x = ""x ] ; then
+    LogError "Node id for the llt server not known"
+    THISRC=${__FALSE}
+  else    
+    LogMsg "Starting a test llt client to connect to the node id ${LLTSERVER_ID} ..."
+    if [ ! -x "${LLTPING}" ] ; then
+      LogError "${LLTPING} not found or not executable"
+      THISRC=${__FALSE}
+    else
+      ( set -x ; ${LLTPING} -c ${LLTSERVER_ID} -T  )
+    fi
+  fi
+
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_check_if_llt_is_running
+#
+# function: check if the llt daemon is running
+#
+# usage: task_check_if_llt_is_running
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_check_if_llt_is_running {                  
+  typeset __FUNCTION="task_check_if_llt_is_running"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  LogMsg "Checking if the llt daemon is running ..."
+
+  if [ ! -x "${SERVICE}" ] ; then
+    LogError "${SERVICE} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    CUR_OUTPUT="$( set -x ; ${SERVICE} llt status 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+    if [ ${TEMPRC} = 0 ] ; then
+      LogMsg "The llt daemon is running"
+    else
+      LogError "The llt daemon is not running"
+      THISRC=${__FALSE}
+    fi
+  fi
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_check_if_gab_is_running
+#
+# function: check if the gab daemon is running
+#
+# usage: task_check_if_gab_is_running
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_check_if_gab_is_running {                  
+  typeset __FUNCTION="task_check_if_gab_is_running"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  LogMsg "Checking if the gab daemon is running ..."
+
+  if [ ! -x "${SERVICE}" ] ; then
+    LogError "${SERVICE} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    CUR_OUTPUT="$( set -x ; ${SERVICE} gab status 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+    if [ ${TEMPRC} = 0 ] ; then
+      LogMsg "The gab daemon is running"
+    else
+      LogError "The gab daemon is not running"
+      THISRC=${__FALSE}
+    fi
+  fi
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_check_if_the_cluster_is_running
+#
+# function: check if the cluster is running
+#
+# usage: check_if_the_cluster_is_running
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_check_if_the_cluster_is_running {                  
+  typeset __FUNCTION="task_check_if_the_cluster_is_running"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+# add your code her
+
+  LogMsg "Checking if the cluster is running ..."
+  
+  if [ ! -x "${HASTATUS}" ] ; then
+    LogError "${HASTATUS} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    CUR_OUTPUT="$( set -x ; ${HASTATUS} -sum 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+    if [ ${TEMPRC} = 0 ] ; then
+      LogMsg "The cluster is running"
+    else
+      LogError "The cluster is not running"
+      THISRC=${__FALSE}
+    fi
+  fi
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_check_if_infoscale_testlicense_is_installed
+#
+# function: check if the infoscale testlicense is installed
+#
+# usage: task_check_if_infoscale_testlicense_is_installed
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_check_if_infoscale_testlicense_is_installed {                  
+  typeset __FUNCTION="task_check_if_infoscale_testlicense_is_installed"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+   
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  if [ ! -x "${VXKEYLESS}" ] ; then
+    LogError "${VXKEYLESS} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    CUR_OUTPUT="$( set -x ; ${VXKEYLESS} display 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+   
+    if [ ${TEMPRC} = 0 ] ; then
+      LogMsg "The infoscale test license is installed."
+    else
+      LogError "The infoscale test license is not installed"
+      THISRC=${__FALSE}
+    fi
+  fi  
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_remove_infoscale_testlicense
+#
+# function: remove the infoscale testlicense
+#
+# usage: task_remove_infoscale_testlicense
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_remove_infoscale_testlicense {                  
+  typeset __FUNCTION="task_remove_infoscale_testlicense"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+   
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  LogMsg "Removing the infoscale test license ..."
+  if [ ! -x "${VXKEYLESS}" ] ; then
+    LogError "${VXKEYLESS} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    CUR_OUTPUT="$( set -x ; ${VXKEYLESS} display 2>&1 )"
+    TEMPRC=$?
+    if [ ${TEMPRC} != 0 ] ; then
+      LogMsg "The infoscale test license is not installed:"
+      LogMsg "-" "${CUR_OUTPUT}"
+    else
+      CUR_OUTPUT="$( set -x ; ${VXKEYLESS} -q set NONE 2>&1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+      if [ ${TEMPRC} != 0 ] ; then
+        LogError "Error removing the infoscale test license"
+        THISRC=${__FALSE}
+      else
+        LogMsg "Infoscale test license removed"
+        CUR_OUTPUT="$( set -x ; ${VXKEYLESS} display 2>&1 )"
+        LogMsg "Installed infoscale test licenses are now:"
+        LogMsg "-" "${CUR_OUTPUT}"
+      fi
+    fi      
+  fi
+  
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_configure_infoscale_testlicense
+#
+# function: configure a infoscale testlicense
+#
+# usage: task_configure_infoscale_testlicense [licensetype] 
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_configure_infoscale_testlicense {                  
+  typeset __FUNCTION="task_configure_infoscale_testlicense"
+  typeset TASK_USAGE="${__FUNCTION} [licensetype]  # def: ENTERPRISE "
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset INFOSCALE_LICENSE="$1"
+  
+  typeset DEFAULT_INFOSCALE_LICENSE="ENTERPRISE"
+    
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+  INFOSCALE_LICENSE="${INFOSCALE_LICENSE:=${DEFAULT_INFOSCALE_LICENSE}}"
+  LogMsg "Configuring the infoscale test license \"${INFOSCALE_LICENSE}\" ..."
+  if [ ! -x "${VXKEYLESS}" ] ; then
+    LogError "${VXKEYLESS} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    CUR_OUTPUT="$( ${VXKEYLESS} display 2>&1 )"
+    if [[ ${CUR_OUTPUT} == *${INFOSCALE_LICENSE}* ]] ; then
+      LogMsg "The infoscale test license \"${INFOSCALE_LICENSE}\" is already installed:"
+      LogMsg "-" "${CUR_OUTPUT}"
+    else
+      CUR_OUTPUT="$( set -x ; ${VXKEYLESS} -q set "${INFOSCALE_LICENSE}" 2>&1 )"
+      TEMPRC=$?
+      LogMsg "-" "${CUR_OUTPUT}"
+      ${VXKEYLESS} display 2>&1 | grep "${INFOSCALE_LICENSE}" >/dev/null
+      if [ $? != 0 ] ; then
+        LogError "Error installing the infoscale test license \"${INFOSCALE_LICENSE}\" "
+        THISRC=${__FALSE}
+      else
+        LogMsg "Infoscale test license \"${INFOSCALE_LICENSE}\" installed"
+        CUR_OUTPUT="$( set -x ; ${VXKEYLESS} display 2>&1 )"
+        LogMsg "Installed infoscale test licenses are now:"
+        LogMsg "-" "${CUR_OUTPUT}"
+      fi
+    fi      
+  fi
+  
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_check_if_vxvm_starts_after_the_next_reboot
+#
+# function: check if the VxVM starts after the next reboot
+#
+# usage: task_check_if_vxvm_starts_after_the_next_reboot
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_check_if_vxvm_starts_after_the_next_reboot {                  
+  typeset __FUNCTION="task_check_if_vxvm_starts_after_the_next_reboot"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  if [ ! -r "${VXVM_INSTALL_DB_FILE}" ] ; then
+    LogMsg "The automatic start of the VxVM after the reboot is enabled"
+  else
+    LogError "The automatic start of the VxVM after the reboot is disabled"
+    THISRC=${__FALSE}
+  fi
+
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_enable_vxvm_after_the_next_reboot
+#
+# function: enable the start of the VxVM after the next reboot
+#
+# usage: task_enable_vxvm_after_the_next_reboot
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_enable_vxvm_after_the_next_reboot {                  
+  typeset __FUNCTION="task_enable_vxvm_after_the_next_reboot"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  if [ ! -r "${VXVM_INSTALL_DB_FILE}" ] ; then
+    LogMsg "The automatic start of the VxVM after the reboot is already enabled"
+  else
+    LogMsg "Enabling the automatic restart of VxVM after the next reboot ..."
+    CUR_OUTPUT="$( set -x ; rm "${VXVM_INSTALL_DB_FILE}" 2>&1 )"
+    LogMsg "-" "${CUR_OUTPUT}"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT} "
+    if [ ${TEMPRC} != 0 -o -r "${VXVM_INSTALL_DB_FILE}" ] ; then
+      LogError "Error enabling the automatic restart of VxVM "
+      THISRC=${__FALSE}
+    else
+      LogMsg "Autmatic restart of VxVM after reboot enabled"
+    fi
+   fi
+
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_disable_vxvm_after_the_next_reboot
+#
+# function: disable the start of the VxVM after the next reboot
+#
+# usage: task_disable_vxvm_after_the_next_reboot
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_disable_vxvm_after_the_next_reboot {                  
+  typeset __FUNCTION="task_disable_vxvm_after_the_next_reboot"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  if [ -r "${VXVM_INSTALL_DB_FILE}" ] ; then
+    LogMsg "The automatic start of the VxVM after the reboot is already disabled"
+  else
+    LogMsg "Disabling the automatic restart of VxVM after the next reboot ..."
+    CUR_OUTPUT="$( set -x ; touch "${VXVM_INSTALL_DB_FILE}" 2>&1 )"
+    LogMsg "-" "${CUR_OUTPUT}"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT} "
+    if [ ${TEMPRC} != 0 -o ! -r "${VXVM_INSTALL_DB_FILE}" ] ; then
+      LogError "Error disabling the automatic restart of VxVM "
+      THISRC=${__FALSE}
+    else
+      LogMsg "Autmatic restart of VxVM after reboot disabled"
+    fi
+   fi
+
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_check_if_vxvm_is_running
+#
+# function: check if VxVM is running
+#
+# usage: task_check_if_vxvm_is_running
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_check_if_vxvm_is_running {                  
+  typeset __FUNCTION="task_check_if_vxvm_is_running"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+  
+  if [ ! -x "${VXDCTL}" ] ; then
+    LogError "${VXDCTL} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    CUR_OUTPUT="$( set -x ;  "${VXDCTL}" list 2>&1 )"
+    TEMPRC=$?
+    LogMsg "-" "${CUR_OUTPUT}"
+    if [ ${TEMPRC} = 0 ] ; then
+      LogMsg "VxVM is running"
+    else
+      LogError "VxvM is not running"
+      THISRC=${__FALSE}
+    fi
+  fi
+
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_start_vxvm
+#
+# function: temporary start the VxVM 
+#
+# usage: task_start_vxvm
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_start_vxvm {                  
+  typeset __FUNCTION="task_start_vxvm"
+  typeset TASK_USAGE="${__FUNCTION}"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+  
+  if [ ! -x "${VXDCTL}" ] ; then
+    LogError "${VXDCTL} not found or not executable"
+    THISRC=${__FALSE}
+  else
+    CUR_OUTPUT="$( set -x ; ${VXDCTL} enable 2>&1 )"
+    if [ $? -eq 0 ] ; then
+      LogMsg "VxVM is already running"
+    else
+      LogMsg "Starting VxVM now ..."
+      if [ ! -x "${VXIOD}" ] ; then
+        LogError "${VXIOD} not found or not executable"
+        THISRC=${__FALSE}
+      elif [ ! -x "${VXCONFIGD}" ] ; then
+        LogError "${VXCONFIGD} not found or not executable"
+        THISRC=${__FALSE}
+      else
+        CUR_OUTPUT="$( exec 2>&1 ; set -x ; ${VXIDO} set 10 ; ${VXCONFIGD} -m disable ; ${VXDCTL} init ; ${VXDCTL} enable )"
+        TEMPRC=$?
+        LogMsg "-" "${CUR_OUTPUT}"
+        if [ ${TEMPRC} -eq 0 ] ; then
+          LogMsg "VxVM successfully started"
+        else
+          LogError "Error starting the VxVM"
+          THISRC=${__FALSE}
+        fi
+      fi
+    fi
+  fi
+
+  if [ -r "${VXVM_INSTALL_DB_FILE}" ] ; then
+    LogMsg "Note: The file ${VXVM_INSTALL_DB_FILE} exists -- VxVM will NOT start automatically after the next reboot"
+    LogMsg "      Use the task \"task_ensable_vxvm_after_the_next_reboot\" to enable the automatic start of VxVM"
+  fi
+  
+  return ${THISRC}
+}
+
+
+# ----------------------------------------------------------------------
+# task_create_cluster_uuid
+#
+# function: create a VCS cluster uuid
+#
+# usage: task_create_cluster_uuid [init|uuid]
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_create_cluster_uuid {                  
+  typeset __FUNCTION="task_create_cluster_uuid"
+  typeset TASK_USAGE="${__FUNCTION} [init|uuid] # def: ask user"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset NEW_UUID="$1"
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+  
+  if [ "${NEW_UUID}"x = ""x ] ; then
+    while true ; do
+      AskUser "Please enter the Cluster UUID (exit to to change the Cluster UUID): "
+      NEW_UUID="${USER_INPUT}"
+      [ "${NEW_UUID}"x != ""x ] && break
+    done
+  fi    
+
+  case ${NEW_UUID} in 
+
+    exit )
+      LogMsg "Cluster UUID not changed on user request"
+      ;;
+      
+    init )
+      LogMsg "Creating the initial Cluster UUID ..."
+      if [ -r "${UUID_FILE}" ] ; then 
+        LogError "The Cluster UUID file \"${UUID_FILE}\" already exists with this UUID:"
+        LogMsg "-" "$( cat "${UUID_FILE}" )"
+        THISRC=${__FALSE}        
+      elif [ ! -x "${UUIDCONFIG}" ] ; then
+        LogError "${UUIDCONFIG} not found or not executable"
+        THISRC=${__FALSE}
+      else
+        CUR_OUTPUT="$( set -x ; mkdir -p "${UUID_DIRECTORY}" 2>&1 && ${UUIDCONFIG} -clus -configure ${HOSTNAME} 2>&1)"
+        if [ -r "${UUID_FILE}" ] ; then 
+          LogMsg "The Cluster UUID file \"${UUID_FILE}\" created with this UUID:"
+          NEW_UUID="$( cat "${UUID_FILE}" )"
+          LogMsg "-" "${NEW_UUID}"
+          LogMsg "-" "
+
+Note:
+          
+Create the Cluster UUID file on the other cluster nodes using either
+echo \"${NEW_UUID}\" >${UUID_FILE}
+
+or use the task
+
+\"task_create_cluster_uuid:${NEW_UUID}\"
+"
+        else
+          LogError "Error Creating the Cluster UUID file \"${UUID_FILE}\": "
+          LogMsg "-" "${CUR_OUTPUT}"
+          THISRC=${__FALSE}
+        fi       
+      fi
+      ;;
+    
+    {*} )     
+      LogMsg "Creating the Cluster UUID file with the Cluster UUID \"${NEW_UUID}\" ..."
+      if [ -r "${UUID_FILE}" ] ; then 
+        LogError "The Cluster UUID file \"${UUID_FILE}\" already exists with this UUID:"
+        LogMsg "-" "$( cat "${UUID_FILE}" )"
+        THISRC=${__FALSE}        
+      else
+        CUR_OUTPUT="$( set -x ; mkdir -p "${UUID_DIRECTORY}" 2>&1 && echo "${NEW_UUID}">"${UUID_FILE}"  2>&1)"
+        if [ -r "${UUID_FILE}" ] ; then 
+          LogMsg "The Cluster UUID file \"${UUID_FILE}\" created with this UUID:"
+          LogMsg "-" "$( cat "${UUID_FILE}" )"
+        else
+          LogError "Error Creating the Cluster UUID file \"${UUID_FILE}\": "
+          LogMsg "-" "${CUR_OUTPUT}"
+          THISRC=${__FALSE}
+        fi       
+      fi
+      ;;
+      
+    * )
+      LogError "Invliad UUID entered: \"${NEW_UUID}\" "
+      THISRC=${__FALSE}
+      ;;
+  esac
+       
+  return ${THISRC}
+}
+
+# ----------------------------------------------------------------------
+# task_template
+#
+# function: [add the task description here]
+#
+# usage: [add the usage help for the task here]
+#
+# returns: ${__TRUE} - ok executing the task
+#          ${__FALSE} - error executing the task
+#
+#
+function task_template {
+  typeset __FUNCTION="task_template"
+  typeset TASK_USAGE="${__FUNCTION} [add the parameter for the task here]"
+  ${__DEBUG_CODE}
+  ${__FUNCTION_INIT}
+
+  typeset THISRC=${__TRUE}
+
+  typeset CUR_OUTPUT=""
+  typeset TEMPRC=""
+
+# add your code her
+
+  return ${THISRC}
+}

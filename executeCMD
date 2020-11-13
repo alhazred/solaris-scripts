@@ -1,0 +1,120 @@
+#!/usr/bin/ksh
+
+# Usage:
+#  echo "<a target=\"rechts\" href=\"/cgi-bin/executeCMD/dtterm?dtterm_on_${CUR_MACHINE}?telnet?${CUR_MACHINE}\">"
+#
+
+# disable filename globbing
+set -f
+
+echo Content-type: text/plain
+echo
+
+# echo CGI/1.0 test script report:
+# echo
+
+# echo argc is $#. argv is "$*".
+# echo
+
+# echo SERVER_SOFTWARE = $SERVER_SOFTWARE
+# echo SERVER_NAME = $SERVER_NAME
+# echo GATEWAY_INTERFACE = $GATEWAY_INTERFACE
+# echo SERVER_PROTOCOL = $SERVER_PROTOCOL
+# echo SERVER_PORT = $SERVER_PORT
+# echo REQUEST_METHOD = $REQUEST_METHOD
+# echo HTTP_ACCEPT = "$HTTP_ACCEPT"
+# echo PATH_INFO = "$PATH_INFO"
+# echo PATH_TRANSLATED = "$PATH_TRANSLATED"
+# echo SCRIPT_NAME = "$SCRIPT_NAME"
+# echo QUERY_STRING = "$QUERY_STRING"
+# echo REMOTE_HOST = $REMOTE_HOST
+# echo REMOTE_ADDR = $REMOTE_ADDR
+# echo REMOTE_USER = $REMOTE_USER
+# echo AUTH_TYPE = $AUTH_TYPE
+# echo CONTENT_TYPE = $CONTENT_TYPE
+# echo CONTENT_LENGTH = $CONTENT_LENGTH
+
+CURRENT_ACTION=${PATH_INFO#/*}
+# echo "CURRENT_ACTION is \"$CURRENT_ACTION\" "
+
+exec 2>&1
+oIFS=$IFS
+IFS="?"
+
+set -- $QUERY_STRING
+IFS=$oIFS
+
+CURRENT_TITLE=$1
+shift
+
+CURRENT_COMMAND=$*
+
+echo "Checking the XServer on \"$REMOTE_ADDR:0.0\" (this takes about 5 seconds) ..."
+if [ "$REMOTE_ADDR"x = "194.127.238.18"x ] ; then
+  echo "ERROR: There is no XServer running on \"$REMOTE_ADDR:0.0\""
+  echo "Can NOT display the choosen page, sorry."
+  exit
+fi
+
+
+echo "You should see a XClock on your desktop right now .."
+DISPLAY=$REMOTE_ADDR:0.0
+export DISPLAY
+ /usr/openwin/bin/xclock &
+BG_PROC_ID=$!
+sleep 4
+ps -ef | grep -i $BG_PROC_ID 2>/dev/null
+if [ $? -eq 0 ] ; then
+  echo "The Xclock should be gone right now."
+  kill $BG_PROC_ID
+  echo "OK, there is a XServer running on \"$REMOTE_ADDR:0.0\"."
+else
+  echo "ERROR: There is no XServer running on \"$REMOTE_ADDR:0.0\""
+  echo "Can NOT display the choosen page, sorry."
+  exit
+fi
+
+case $PATH_INFO in
+  "/dtterm" )
+
+    echo "Starting a dtterm on \"$REMOTE_ADDR:0.0\" executing \"$CURRENT_COMMAND\" ..."
+    /usr/dt/bin/dtterm -display $REMOTE_ADDR:0.0 -title $CURRENT_TITLE -e $CURRENT_COMMAND  2>&1 >/dev/null &
+   ;;
+
+  "/xterm" )
+
+    echo "Starting an xterm on \"$REMOTE_ADDR:0.0\" executing \"$CURRENT_COMMAND\" ..."
+    /usr/openwin/bin/xterm -display $REMOTE_ADDR:0.0 -fg yellow -bg black -sb -s -sl 500 -title $CURRENT_TITLE -e $CURRENT_COMMAND >/dev/null 2>&1 &
+   ;;
+
+  "/netscape" )
+    echo "Starting Netscape 7 on $SERVER_NAME using the Xserver $REMOTE_ADDR:0.0."
+    echo "This may take a while (up to 5 minutes); please be patient."
+    HOME=/export/home/httpd
+    export HOME
+    DISPLAY=$REMOTE_ADDR:0.0
+    export DISPLAY
+    /usr/dt/bin/dtterm -title $CURRENT_TITLE -e $CURRENT_COMMAND  2>&1 >/dev/null
+   ;;
+
+  "/rdesktop" )
+    echo "Starting remote desktop for $CURRENT_COMMAND on $SERVER_NAME using the Xserver $REMOTE_ADDR:0.0."
+    echo "This may take a while (up to 5 minutes); please be patient."
+    HOME=/export/home/httpd
+    export HOME
+    DISPLAY=$REMOTE_ADDR:0.0
+    export DISPLAY
+    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/ssl/lib
+    export LD_LIBRARY_PATH
+    /opt/csw/bin/rdesktop -k de $CURRENT_COMMAND  2>&1 >/dev/null
+    ;;
+    
+  * )
+   echo "---------------------------------------------------------"
+   echo ""
+   echo "ERROR: I don't know what to do with \"$PATH_INFO\" " 
+   echo "       What the hell are you trying to do???"
+   echo ""
+   echo "---------------------------------------------------------"
+esac
+exit 0

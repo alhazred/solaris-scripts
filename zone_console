@@ -1,0 +1,196 @@
+#!/usr/bin/ksh
+#
+# zone_console - simple script to start and stop zone console session in screen sessions
+#
+# History
+#   05.09.2009/bs 
+#       initial release
+#
+# reuqirements
+#   screen must be installed
+#   screen homepage: http://www.gnu.org/software/screen/
+#
+# CDDL HEADER START
+#
+# The contents of this file and the script are subject to the terms of the
+# Common Development and Distribution License, Version 1.0 only
+# (the "License").  You may not use this file except in compliance
+# with the License.
+#
+# You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
+# or http://www.opensolaris.org/os/licensing.
+# See the License for the specific language governing permissions
+# and limitations under the License.
+#
+# When distributing Covered Code, include this CDDL HEADER in each
+# file and include the License file at usr/src/OPENSOLARIS.LICENSE.
+# If applicable, add the following below this CDDL HEADER, with the
+# fields enclosed by brackets "[]" replaced with your own identifying
+# information: Portions Copyright [yyyy] [name of copyright owner]
+#
+# CDDL HEADER END
+
+# this script
+#
+_THIS_SCRIPT="${0##*/}"
+
+# additional options for the screen sessions
+#
+ADD_START_SCREEEN_OPTIONS=""
+
+ADD_CONNECT_SCREEN_OPTIONS=""
+
+# get the list of installed zones
+#
+LIST_OF_ZONES="$( zoneadm list -i | grep -v global )"
+
+# sub routines
+
+logMsg() {
+  echo "[${_THIS_SCRIPT}] $*"
+}
+
+
+logInfo() {
+  [ "${VERBOSE}"X != ""X ] && logMsg "INFO: $*"
+}
+
+logError() {
+  logMsg "ERROR: $*" >&2
+}
+
+die () {
+  typeset THISRC=$1
+  if [ $# -ne 0 ] ; then
+    shift
+    typeset THISMSG="$*"
+    [ "${THISRC}"x = "0"x ] && logMsg "${THISMSG}" ||  logError "${THISMSG}" 
+  fi
+  exit  ${THISRC}
+}
+
+zone_exist() {
+ [ $# -eq 1 ] &&  zoneadm -z $1 list  2>/dev/null >/dev/null || return 1
+}
+
+screen_session_running() {
+ [ $# -eq 1 ] && screen -list  | cut -f2 | grep "^[0-9]*\." | cut -f2 -d "." | grep "${1}_console" >/dev/null || return 1
+}
+
+get_screen_pid() {
+  [ $# -eq 1 ] && screen -list  | cut -f2 | grep  "^[0-9]*\." | grep "${1}_console" | cut -f1  -d "."  || return 1
+}
+
+start_screen_session() {
+  typeset CUR_ZONE="$1"
+  [ $# -eq 1 ] && screen -dmS "${CUR_ZONE}_console" ${ADD_START_SCREEEN_OPTIONS} zlogin -C ${CUR_ZONE}
+}
+
+connect_screen_session() {
+  typeset CUR_ZONE="$1"
+  [ $# -eq 1 ] && screen -S "${CUR_ZONE}_console" -R -DD  ${ADD_CONNECT_SCREEEN_OPTIONS}
+}
+
+
+# --- main function ---
+
+# check the prerequisites
+#
+[ "$( id | sed 's/uid=\([0-9]*\)(.*/\1/' )" = 0 ] || die 100 "This script must be executed by root"
+
+for CUR_BINARY in screen zoneadm zlogin ; do
+  whence "${CUR_BINARY}" 2>/dev/null >/dev/null || die 101 "\"${CUR_BINARY}\" is NOT installed or NOT available via the path variable"
+done
+
+# execute the requested function
+#
+
+case $1 in
+
+  start )
+    shift
+    [ $# -ne 0 ] && LIST_OF_ZONES="$*"
+    logInfo "Starting the screen sessions for the console of the zones ${LIST_OF_ZONES}\" ..."
+   
+    for CUR_ZONE in ${LIST_OF_ZONES} ; do
+      zone_exist "${CUR_ZONE}" 
+      if [ $? -ne 0 ] ; then
+        logError "Zone \"${CUR_ZONE}\" does NOT exist"    
+        continue
+      fi
+
+      if screen_session_running "${CUR_ZONE}" ; then
+        logMsg "Screen session for the console of the the zone \"${CUR_ZONE}\" is already running"
+      else
+        logMsg "Starting the screen session for the console of the zone \"${CUR_ZONE}\" ..."
+        start_screen_session "${CUR_ZONE}"
+      fi
+    done
+    ;;
+    
+  stop )
+    shift
+    [ $# -ne 0 ] && LIST_OF_ZONES="$*"
+    logInfo "Stoping the screen sessions for the console of the zones \"${LIST_OF_ZONES}\" ..."
+  
+    for CUR_ZONE in ${LIST_OF_ZONES} ; do
+      zone_exist "${CUR_ZONE}" 
+      if [ $? -ne 0 ] ; then
+        logError "The zone \"${CUR_ZONE}\" does NOT exist"    
+        continue
+      fi
+    
+      if screen_session_running "${CUR_ZONE}" ; then
+        logMsg "Stoping the screen session for the console of the zone \"${CUR_ZONE}\" ..."
+        SCREEN_PID="$( get_screen_pid ${CUR_ZONE} )"
+        [ "${SCREEN_PID}"X != ""X ] && kill ${SCREEN_PID} || logMsg "Warning: Can NOT detect the PID of this screen session"
+      else
+        logMsg "The screen session for the console of the zone \"${CUR_ZONE}\" is NOT running"
+      fi
+    done
+    ;;
+
+
+  status )  
+    shift
+    [ $# -ne 0 ] && LIST_OF_ZONES="$*"
+    logInfo "Checking the status of the screen session for the console of the zones \"${LIST_OF_ZONES}\" ..."
+  
+    for CUR_ZONE in ${LIST_OF_ZONES} ; do
+      zone_exist "${CUR_ZONE}" 
+      if [ $? -ne 0 ] ; then
+        logError "The zone \"${CUR_ZONE}\" does NOT exist"    
+        continue
+      fi
+    
+      if screen_session_running "${CUR_ZONE}" ; then
+        logMsg "The screen session for the console of the zone \"${CUR_ZONE}\" is running"
+      else
+        logMsg "The screen session for the console of the zone \"${CUR_ZONE}\" is NOT running"
+      fi
+    done
+    ;;
+
+  "-h" | "--help" | "-?" )
+    logMsg "Usage: $0 [start {zone1 ... zone#}|stop {zone1 ... zone#}|status {zone1 ...zone#}|{console} zone]"
+    exit 5
+    ;;
+    
+  * )
+    [ "$1"x = "console"x ] && shift
+
+    [ $# -eq 1 ] || die 10 "Invalid usage"
+ 
+    CUR_ZONE="$1"
+    zone_exist "${CUR_ZONE}" || die 15 "The zone \"${CUR_ZONE}\" does NOT exist"
+    screen_session_running "${CUR_ZONE}" 
+    if [ $? -ne 0 ] ; then
+      logMsg "Starting the screen session for the console of the zone \"${CUR_ZONE}\" ..."
+      start_screen_session "${CUR_ZONE}"
+    fi
+
+    logInfo "The console for the zone \"${CUR_ZONE}\" is already running, now connecting ..."
+    connect_screen_session "${CUR_ZONE}"
+    ;;
+  
+esac
